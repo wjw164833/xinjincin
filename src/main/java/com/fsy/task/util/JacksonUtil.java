@@ -18,12 +18,10 @@ public class JacksonUtil {
     private static ObjectMapper objectMapper = new ObjectMapper();
 
     public static List<Map<String,String>> answersCache = null;
-    public static void main(String[] args) throws IOException {
-        JacksonUtil.getQuestions();
-    }
-    public static List<Map<String,String>> getQuestions() throws IOException {
+
+    public static List<Map<String,String>> getQuestions(String questionFilePath) throws IOException {
         List<Map<String,String>> questions = JacksonUtil.objectMapper.readValue(
-                new File("/Users/vincent/gitRepos/selfAnswerTool_250/target/classes/online_question_bank.json")
+                new File(questionFilePath)
                 , List.class);
         answersCache = questions;
         return questions;

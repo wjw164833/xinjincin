@@ -31,6 +31,7 @@ public class APIController {
 
     public static List<ImportUser> userList ;
 
+
     private String lUserId;
 
 
@@ -79,6 +80,7 @@ public class APIController {
                             + plan.getShowPlanNumber(),  this.getCookie() );
                     //过滤出已完成的
                     float hasCompleteExercise = 1.0f;
+                    long startTimeMills = System.currentTimeMillis();
                     for(Exercise exercise : exercises){
                         if(exercise.getStatus().contains("未完成")){
                             // / )
@@ -99,13 +101,60 @@ public class APIController {
                             }
                             for(int count = 0 ; count < needCount ; count++){
                                 this.watchVideo(exercise.getNumber());
-                                System.out.println(count);
+                                log.info(".");
+                                //解决看视频太慢的问题
+                                //        Thread.sleep(30000);
+                                //支持秒刷的业务逻辑
+
+                            }
+                        }
+
+                    }
+
+                    long endTimeMills = System.currentTimeMillis();
+
+                    long periodTime = endTimeMills - startTimeMills;
+
+                    long periodTimeSecond = periodTime / 1000 ;
+
+                    if(periodTimeSecond < 30 ){
+                        Thread.sleep((30 - periodTimeSecond) * 1000);
+                    }
+
+                    //支持秒刷的业务
+                    for(Exercise exercise : exercises){
+                        if(exercise.getStatus().contains("未完成")){
+                            // / )
+
+                            int leftNumberIndex = exercise.getStatus().indexOf("（");
+
+                            int indexStart = exercise.getStatus().indexOf("/ ");
+                            int hasCompleteCount = Integer.valueOf(exercise.getStatus().substring(leftNumberIndex + "（".length() ,indexStart -1 ));
+
+                            int indexEnd = exercise.getStatus().indexOf("）");
+                            String allNeedCount = exercise.getStatus().substring(indexStart + "/ ".length(), indexEnd  ).trim();
+                            int need2Complete = Integer.valueOf(allNeedCount) - hasCompleteCount;
+                            int needCount = -1;
+                            if(need2Complete % 2 == 0){
+                                needCount = need2Complete / 2 ;
+                            }else{
+                                needCount = need2Complete / 2 + 1 ;
+                            }
+                            for(int count = 0 ; count < needCount ; count++){
+                                //解决看视频太慢的问题 浪费了三十秒 很慢 要是多个答案 就非常慢了
+                                //        Thread.sleep(30000);
+                                //支持秒刷的业务逻辑
+                                String url = "http://course.njcedu.com/Servlet/recordStudy.svl?lCourseId=" + exercise.getNumber() +
+                                        "&lSchoolId=" + this.schoolCodeMap.get(this.loginDomain) + "&strStartTime=0";
+                                HttpClientUtil.getResByUrlAndCookie(url, null , getCookieByMap(cookieMap), false);
+                                System.out.print(".");
                             }
                         }
                         hasCompleteExercise++;
                         log.info(blankStyle+ blankStyle + exercise.getName() );
                         log.info( blankStyle + blankStyle + hasCompleteExercise / exercises.size() * 100 +"%");
                     }
+
                 }else{
                     log.info("看视频 "+ plan.getTaskName() + " 已完成 ，自动跳过。");
                 }
@@ -130,7 +179,7 @@ public class APIController {
                     float hasCompleteExercise = 1.0f;
                     for(Exercise exercise : exercises){
 //                        log.info(exercise.getName());
-                        if(!exercise.getRightPercent().equals("100.0%")){
+                        if(!exercise.getRightPercent().equals("100.0%") && !exercise.getRightPercent().equals("-/-") ){
                             List<Question> questions = this.getQuestionByCourseId(exercise.getNumber() ,  this.getCookie());
                             this.doAnswer(this.getCookie() , exercise.getNumber() , questions);
                         }
@@ -647,7 +696,7 @@ public class APIController {
     }
 
     /**
-     * 后台看视频 进度 +2
+     * 后台看视频 进度 +2 系统需要30s的延迟接口请求的时间 30s请求两次 返回超时
      *
      * @param courseId http://course.njcedu.com/Servlet/recordStudy.svl?lCourseId=1286&lSchoolId=539&strStartTime=0
 
@@ -655,10 +704,14 @@ public class APIController {
     public void watchVideo(String courseId) throws IOException, InterruptedException {
         //数据准备
         getCourseWareCookie(courseId, null, null);
-        Thread.sleep(30000);
-        String url = "http://course.njcedu.com/Servlet/recordStudy.svl?lCourseId=" + courseId +
-                "&lSchoolId=" + this.schoolCodeMap.get(this.loginDomain) + "&strStartTime=0";
-        HttpClientUtil.getResByUrlAndCookie(url, null , getCookieByMap(cookieMap), false);
+
+        //解决看视频太慢的问题
+//        Thread.sleep(30000);
+        //支持秒刷的业务逻辑 将代码迁移出去
+
+//        String url = "http://course.njcedu.com/Servlet/recordStudy.svl?lCourseId=" + courseId +
+//                "&lSchoolId=" + this.schoolCodeMap.get(this.loginDomain) + "&strStartTime=0";
+//        HttpClientUtil.getResByUrlAndCookie(url, null , getCookieByMap(cookieMap), false);
 
         return;
 

@@ -16,7 +16,7 @@ public class UserImportUtil {
             users.add(ImportUser.builder()
                     .username(line.split(",")[0])
                     .password(line.split(",")[1])
-                    .schoolToken(line.split(",")[2])
+                    //.schoolToken(line.split(",")[2])
                     .build());
         }
         return users;

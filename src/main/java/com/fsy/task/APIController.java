@@ -5,6 +5,7 @@ import com.fsy.task.domain.ImportUser;
 import com.fsy.task.domain.Question;
 import com.fsy.task.domain.TeachPlan;
 import com.fsy.task.domain.enums.AnswerOption;
+import com.fsy.task.selenium.SeleniumUtil;
 import com.fsy.task.util.HttpClientUtil;
 import com.fsy.task.util.JacksonUtil;
 import com.fsy.task.util.MD5Util;
@@ -22,6 +23,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class APIController {
+
+    private static SeleniumUtil util = new SeleniumUtil();
     private Logger log = Logger.getLogger(APIController.class.getName());
 
     private HashMap<String, String> cookieMap = new HashMap<String, String>();
@@ -55,7 +58,7 @@ public class APIController {
     }
     public APIController(String schoolToken ,String username , String password, AnswerOption option) throws IOException, ParserException, InterruptedException {
         this();
-        setSchoolToken(schoolToken);
+        setSchoolToken(util.getSchoolToken(username ,password));
         if(option.equals(AnswerOption.ANSWER)){
             doAnswer01(username , password);
         }else if(option.equals(AnswerOption.WATCH)){
@@ -69,7 +72,11 @@ public class APIController {
     private void doWatch01(String username, String password) throws IOException, InterruptedException, ParserException {
         //需要登录
         log.info(username + "  开始看视频：");
-        getSchoolLoginUrlAndCookie(username , password);
+
+        String respAndCookie = getSchoolLoginUrlAndCookie(username , password);
+
+        String loginUrl = respAndCookie.split(",")[0];
+//        getSchoolCookie(loginUrl , getCookie());
         List<TeachPlan> plans = getTeachPlans(getCookie());
         String blankStyle = "      ";
         if(plans != null && plans.size() >0){
@@ -101,12 +108,14 @@ public class APIController {
                             }
                             for(int count = 0 ; count < needCount ; count++){
                                 this.watchVideo(exercise.getNumber());
-                                log.info(".");
+                                System.out.print(".");
                                 //解决看视频太慢的问题
                                 //        Thread.sleep(30000);
                                 //支持秒刷的业务逻辑
 
                             }
+                        }else{
+                            log.info(exercise.getName() + " 已完成 ，自动跳过。" );
                         }
 
                     }
@@ -117,8 +126,8 @@ public class APIController {
 
                     long periodTimeSecond = periodTime / 1000 ;
 
-                    if(periodTimeSecond < 30 ){
-                        Thread.sleep((30 - periodTimeSecond) * 1000);
+                    if(periodTimeSecond < 60 ){
+                        Thread.sleep((60 - periodTimeSecond) * 1000);
                     }
 
                     //支持秒刷的业务
@@ -151,8 +160,7 @@ public class APIController {
                             }
                         }
                         hasCompleteExercise++;
-                        log.info(blankStyle+ blankStyle + exercise.getName() );
-                        log.info( blankStyle + blankStyle + hasCompleteExercise / exercises.size() * 100 +"%");
+                        log.info(blankStyle+ blankStyle + exercise.getName()  + hasCompleteExercise / exercises.size() * 100 +"%" );
                     }
 
                 }else{
@@ -271,19 +279,24 @@ public class APIController {
     }
 
 
-    public String getSchoolCookie(String url, String cookie) throws IOException {
-
-        url = url + "&jsonpCallback=callback&_=1536240076857";
-
-        Map<String , String> headerPrams = new HashMap<String, String>();
-        headerPrams.put(Constant.USER_AGENT , Constant.MAC_USER_AGENT);
-        headerPrams.put(Constant.REFERER ,  " http://sso.njcedu.com/login.htm?domain="+loginDomain+".njcedu.com");
-
-        String respStr = HttpClientUtil.getResByUrlAndCookie(url, headerPrams , cookie, false);
-
-
-        return null;
-    }
+//    public String getSchoolCookie(String url, String cookie) throws IOException {
+//
+//
+////        String loginUrl = respStr.substring(respStr.indexOf("http:") +1 , respStr.indexOf("<"));
+//
+//        url = url.replace("|","%7c") + "&jsonpCallback=callback&_="+System.currentTimeMillis();
+//
+//        Map<String , String> headerPrams = new HashMap<String, String>();
+//        headerPrams.put(Constant.USER_AGENT , Constant.MAC_USER_AGENT);
+//        headerPrams.put(Constant.REFERER ,  " http://sso.njcedu.com/login.htm?domain="+loginDomain+".njcedu.com");
+//
+//        String respStr = HttpClientUtil.getResByUrlAndCookie(url, headerPrams , getCookie(), true);
+//
+//
+//        rebuildCookieMap(respStr.split("#")[1]);
+//
+//        return null;
+//    }
 
     public List<TeachPlan> getTeachPlans(String cookie) throws IOException, ParserException {
         String teachPlanUrl = "http://"+this.loginDomain+".njcedu.com/student/prese/teachplan/index.htm";
@@ -758,6 +771,7 @@ public class APIController {
         return;
     }
 
+
     private void rebuildCookieMap(String cookie) {
         //remove Path=/ HttpOnly Domain=njcedu.com
         cookie = cookie.replaceAll("Path=/", "")
@@ -801,7 +815,7 @@ class CookieConstant {
 class Constant{
     public static String USER_AGENT = "User-Agent";
     public static String REFERER = "Referer";
-    public static String MAC_USER_AGENT = " Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:61.0) Gecko/20100101 Firefox/61.0";
+    public static String MAC_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:61.0) Gecko/20100101 Firefox/61.0";
 }
 
 

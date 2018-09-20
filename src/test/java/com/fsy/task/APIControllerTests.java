@@ -1,76 +1,11 @@
 package com.fsy.task;
 
-import com.fsy.task.domain.Exercise;
-import com.fsy.task.domain.Question;
-import com.fsy.task.domain.TeachPlan;
-import com.fsy.task.domain.enums.AnswerOption;
 import org.htmlparser.util.ParserException;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.List;
 
 public class APIControllerTests {
-
-//    @Test
-    public void getExercises(){
-        String listenId = "9670000047";
-        try {
-            APIController apiController = new APIController();
-            apiController.getExercises(listenId , GlobalConfig.COOKIE2);
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ParserException e) {
-            e.printStackTrace();
-        }
-    }
-
-//    @Test
-    public void getQuestionByCourseId(){
-
-        APIController apiController = new APIController();
-        String courseId = "1322";
-        try {
-            List<Question> questions = apiController.getQuestionByCourseId(courseId , GlobalConfig.COOKIE2);
-            return;
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ParserException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @Test
-    public void watchVideoTests(){
-
-        String courseId = "1317";
-        String schoolId = "539";
-        int need2Complete = 51-6;
-        int needCount = -1;
-        if(need2Complete % 2 == 0){
-            needCount = need2Complete / 2 ;
-        }else{
-            needCount = need2Complete / 2 + 1 ;
-        }
-        APIController apiController = new APIController(null);
-        try {
-            for(int count = 0 ; count <=need2Complete / 2 + 1  ; count++){
-                apiController.watchVideo(courseId);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        //http://course.njcedu.com/newcourse/coursecc.htm?courseId=1285
-        //获取 courseWare cookie
-    }
-
-    @Test
-    public void courseListTests(){
-        APIController apiController = new APIController(null);
-//        apiController.getExercises()
-    }
 
     @Test
     public void doAnswerOnly() throws IOException, ParserException, InterruptedException {
@@ -85,7 +20,7 @@ public class APIControllerTests {
         //做试题
         //APIController apiController = new APIController(token , "gyu-160308401009" , "123456" ,  AnswerOption.WATCH);
         //gyu-160308401009  123456 看视频
-        APIController apiController = new APIController(token , "gyu-160308401009" , "123456" ,  AnswerOption.WATCH);
+        APIController apiController = new APIController("gyu-160308401009" , "123456");
 
     }
 }

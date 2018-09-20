@@ -8,15 +8,15 @@ package com.fsy.task.gui;
 
 import com.fsy.task.APIController;
 import com.fsy.task.domain.ImportUser;
-import com.fsy.task.domain.enums.AnswerOption;
+import com.fsy.task.util.Constant;
 import com.fsy.task.util.JacksonUtil;
-import com.fsy.task.util.SchoolCodeImportUtil;
 import com.fsy.task.util.UserImportUtil;
 import org.htmlparser.util.ParserException;
-
 import javax.swing.*;
 import java.awt.event.ActionEvent;
+import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 import static javax.swing.JOptionPane.OK_CANCEL_OPTION;
 import static javax.swing.JOptionPane.QUESTION_MESSAGE;
@@ -42,25 +42,27 @@ public class Main extends javax.swing.JFrame {
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">
     private void initComponents() {
-
-        jButton1 = new javax.swing.JButton();
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (UnsupportedLookAndFeelException e) {
+            e.printStackTrace();
+        }
+        this.setTitle("新锦成看课测试测评管理系统V1.0");
         jButton2 = new javax.swing.JButton();
         jButton3 = new javax.swing.JButton();
         importAnswerB = new JButton();
-
+        timeoutField = new JTextField();
+        timeoutField.setColumns(8);
+        jLabel =  new JLabel("页面超时设置:");
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
-        jButton1.setText("导入学生对应学校编码");
-        jButton1.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                try {
-                    jButton1ActionPerformed(evt);
-                } catch (IOException e) {
-                    JOptionPane.showOptionDialog( Main.this , "导入失败 " + e.getMessage() , "通知" , OK_CANCEL_OPTION , QUESTION_MESSAGE , null , null , null);
-                    //e.printStackTrace();
-                }
-            }
-        });
+
 
         jButton2.setText("导入学生对应账号");
         jButton2.addActionListener(new java.awt.event.ActionListener() {
@@ -79,11 +81,16 @@ public class Main extends javax.swing.JFrame {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 try {
                     JFileChooser jFileChooser = new JFileChooser();
+                    setDesktopIfWindows(jFileChooser);
                     jFileChooser.showOpenDialog(Main.this);
-                    JacksonUtil.getQuestions(jFileChooser.getSelectedFile().getAbsolutePath());
+
+                    if(jFileChooser.getSelectedFile() != null){
+                        APIController.answersCache = JacksonUtil.objectMapper.readValue(
+                                new File(jFileChooser.getSelectedFile().getAbsolutePath())
+                                , List.class);
+                    }
                 } catch (IOException e) {
-                    JOptionPane.showOptionDialog( Main.this , "导入失败 " + e.getMessage() , "通知" , OK_CANCEL_OPTION , QUESTION_MESSAGE , null , null , null);
-                    //e.printStackTrace();
+                    //handle the exception
                 }
             }
         });
@@ -103,20 +110,24 @@ public class Main extends javax.swing.JFrame {
                                         .addComponent(jButton3)
                                         .addComponent(importAnswerB)
                                         .addComponent(jButton2)
-                                        .addComponent(jButton1))
+                                                .addComponent(jLabel)
+                                                .addComponent(timeoutField)
+                                        )
 
-                                .addContainerGap(174, Short.MAX_VALUE))
+                                )
         );
         layout.setVerticalGroup(
                 layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                         .addGroup(layout.createSequentialGroup()
                                 .addGap(18, 18, 18)
-                                .addComponent(jButton1)
-                                .addGap(18, 18, 18)
                                 .addComponent(importAnswerB)
                                 .addGap(18 ,18 ,18)
                                 .addComponent(jButton2)
                                 .addGap(54, 54, 54)
+                                .addComponent(jLabel)
+                                .addGap(18 ,18 ,18)
+                                .addComponent(timeoutField)
+                                .addGap(18 ,18 ,18)
                                 .addComponent(jButton3)
                                 .addContainerGap(123, Short.MAX_VALUE))
         );
@@ -125,32 +136,16 @@ public class Main extends javax.swing.JFrame {
     }// </editor-fold>
 
     private void jButton3ActionPerformed(ActionEvent evt) {
-
-        validateParam();
-    }
-
-    private void validateParam() {
-        APIController.initializeSchoolCodeMap();
-        if(APIController.userList == null || APIController.userList.size() ==0 ){
-            JOptionPane.showOptionDialog( Main.this , "学生账户为空列表 ， 请导入"  , "通知" , OK_CANCEL_OPTION , QUESTION_MESSAGE , null , null , null);
-
-            return;
-        }
-        if(APIController.schoolCodeMap == null || APIController.schoolCodeMap.size() ==0){
-            JOptionPane.showOptionDialog( Main.this , "学生对应学校为空列表 ， 请导入"  , "通知" , OK_CANCEL_OPTION , QUESTION_MESSAGE , null , null , null);
-
-            return;
-
-        }
-
         startDo();
     }
 
-    private void startDo() {
 
+
+    private void startDo() {
+        Constant.TIMEOUT = Integer.valueOf(this.timeoutField.getText().toString());
         for(ImportUser user : APIController.userList){
             try {
-                new APIController(user.getSchoolToken() , user.getUsername() , user.getPassword() , AnswerOption.WATCH_AND_ANSWER);
+                new APIController(  user.getUsername() , user.getPassword());
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (ParserException e) {
@@ -161,22 +156,19 @@ public class Main extends javax.swing.JFrame {
         }
     }
 
+
+    public void setDesktopIfWindows(JFileChooser chooser){
+        chooser.setCurrentDirectory(new File(System.getenv("HOME") + "/Desktop"));
+        chooser.setDragEnabled(true);
+    }
     private void jButton2ActionPerformed(ActionEvent evt) throws IOException {
         JFileChooser jFileChooser = new JFileChooser();
+        setDesktopIfWindows(jFileChooser);
         jFileChooser.showOpenDialog(this);
-
-        APIController.userList = UserImportUtil.getImportUserList(jFileChooser.getSelectedFile().getAbsolutePath());
-
+        if(jFileChooser.getSelectedFile() != null){
+            APIController.userList = UserImportUtil.getImportUserList(jFileChooser.getSelectedFile().getAbsolutePath());
+        }
     }
-
-    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) throws IOException {
-        // TODO add your handling code here:
-        JFileChooser jFileChooser = new JFileChooser();
-        jFileChooser.showOpenDialog(this);
-
-        SchoolCodeImportUtil.importSchoolCodeMap(jFileChooser.getSelectedFile().getAbsolutePath());
-    }
-
     /**
      * @param args the command line arguments
      */
@@ -213,10 +205,11 @@ public class Main extends javax.swing.JFrame {
     }
 
     // Variables declaration - do not modify
-    private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
     private javax.swing.JButton jButton3;
 
+    private JLabel jLabel;
+    private JTextField timeoutField;
     private JButton importAnswerB;
     // End of variables declaration
 }

@@ -1,15 +1,10 @@
 package com.fsy.task;
 
-import com.fsy.task.domain.Exercise;
-import com.fsy.task.domain.ImportUser;
-import com.fsy.task.domain.Question;
-import com.fsy.task.domain.TeachPlan;
-import com.fsy.task.domain.enums.AnswerOption;
+import com.fsy.task.domain.*;
 import com.fsy.task.selenium.SeleniumUtil;
 import com.fsy.task.util.HttpClientUtil;
 import com.fsy.task.util.JacksonUtil;
 import com.fsy.task.util.MD5Util;
-import com.fsy.task.util.UserImportUtil;
 import org.htmlparser.Node;
 import org.htmlparser.NodeFilter;
 import org.htmlparser.Parser;
@@ -19,84 +14,231 @@ import org.htmlparser.util.ParserException;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class APIController {
 
-    private static SeleniumUtil util = new SeleniumUtil();
-    private Logger log = Logger.getLogger(APIController.class.getName());
+    private static SeleniumUtil seleniumUtil = new SeleniumUtil();
 
     private HashMap<String, String> cookieMap = new HashMap<String, String>();
 
-    //学校编码 - 学校id 的字典表
-    public static HashMap<String, String > schoolCodeMap = new HashMap<String, String>();
-
     public static List<ImportUser> userList ;
 
+    public static List<Map<String,String>> answersCache = new ArrayList<Map<String, String>>();
+
+    private List<Test> tests = new ArrayList<Test>();
 
     private String lUserId;
 
+    private String lschoolId;
 
-    //TODO 支持可配置
-    public static void initializeSchoolCodeMap() {
-        //延安
-        schoolCodeMap.put("yau" , "585" );
-        //qqhru 齐齐哈尔
-        schoolCodeMap.put("qqhru" , "539" );
-        //贵阳学院 203
-        schoolCodeMap.put("gyu" , "203");
+    private String schoolToken ;
 
+    private String schoolCode;
+
+    private String username;
+
+    private String password;
+
+    private String nickName = "xiao xiao hai ";
+
+    public APIController(String username , String password) throws IOException, ParserException, InterruptedException {
+        User user = seleniumUtil.getUser(username , password);
+
+        this.nickName = user.getNickName();
+
+        this.username = user.getUsername();
+
+        this.password = user.getPassword();
+        this.lUserId = user.getUserId();
+
+        this.lschoolId = user.getSchoolId();
+
+        this.schoolToken = user.getSchoolToken();
+
+        this.schoolCode = user.getSchoolCode();
+
+        validateParam();
+
+        appendSchoolToken2CookieMap(user.getSchoolToken());
+        doAnswer01();
+        doWatch01();
+
+        //测评准备工作
+        preTest();
+    }
+
+    private void preTest() {
+        if(tests != null && tests.size()>0){
+            for(Test test:tests){
+                String testIdPage = doTestId(test.getId()+"");
+                List<QuestionOption> questionOptions = getQuestionIds(testIdPage);
+                publishTestEvent(lschoolId, lUserId, this.nickName, test.getId() +"", questionOptions);
+                System.out.println(this.nickName + "  测评" + test.getId() + " 通过");
+            }
+        }else{
+            System.out.println(this.nickName + "没有测评" + " 跳过");
+        }
+    }
+
+    /**
+     *
+     * @param schoolId
+     * @param userId
+     * @param nickName
+     * @param testId
+     * @param options 选项的个数 影响答题 该题目的id
+     */
+    private void publishTestEvent(String schoolId , String userId , String nickName , String testId ,List<QuestionOption> options){
+        String url = "http://"+this.schoolCode+".njcedu.com/student/tc/careerPlaning/handleTrans.cdo?strServiceName=EvalutionService&strTransName=addEvaluationResult";
+        String cookie = getCookie();
+        HashMap postParam = new HashMap();
+        StringBuffer postValue = new StringBuffer();
+        String originalId = testId;
+        postValue.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "\n" +
+                "<CDO>\n" +
+                "  <STRF N=\"strServiceName\" V=\"EvalutionService\"/>\n" +
+                "  <STRF N=\"strTransName\" V=\"addEvaluationResult\"/>\n" +
+                "  <LF N=\"lSchoolId\" V=\""+schoolId+"\"/>\n" +
+                "  <LF N=\"lUserId\" V=\""+userId+"\"/>\n" +
+                "  <STRF N=\"strUserName\" V=\""+nickName+"\"/>\n" +
+                "  <LF N=\"lEvaluationId\" V=\""+originalId+"\"/>\n" +
+                "  <STRF N=\"strAnswer\" V=\"{answers:[\n");
+
+        StringBuffer wrapValue = new StringBuffer();
+        for(int i = 0 ; i <options.size() ; i++)
+        {
+
+            QuestionOption currentOption = options.get(i);
+            String option = null;
+            String answer = null;
+            if(currentOption.getQuestionOptionCount().equals("2") ){
+                option = "A,B";
+                answer = "1,0";
+            }else if(currentOption.getQuestionOptionCount().equals("5")){
+                option = "A,B,C,D,E";
+                answer = "1,0,0,0,0";
+            }else if(currentOption.getQuestionOptionCount().equals("6")){
+                option = "A,B,C,D,E,F";
+                answer = "1,0,0,0,0,0";
+            }else if(currentOption.getQuestionOptionCount().equals("8")){
+                option = "A,B,C,D,E,F,G,H";
+                answer = "1,0,0,0,0,0,0,0";
+            }else{
+                option = "A,B,C,D,E";
+                answer = "1,0,0,0,0";
+                System.out.println("当前测评选项"+currentOption.getQuestionOptionCount()+"个 , 测评时，目前仅支持有2,5,6,8个项，采用默认配置5个选项 , 问题ID " + currentOption.getQuestionId());
+            }
+
+            //{index:"1",lQuestionId:"2005",type:"0",options:"A,B,C,D,E",answer:"1,0,0,0,0",checkOptions:"A",checkAnswers:"1"}
+            wrapValue.append("{index:\""+(i+1)+"\",lQuestionId:\""+currentOption.getQuestionId()+"\",type:\"0\",options:\""+option+"\",answer:\""+answer+"\",checkOptions:\"A\",checkAnswers:\"1\"}" + ",");
+        }
+        //" to &quot;
+        wrapValue = new StringBuffer(wrapValue.toString().replaceAll("\"" , "&quot;"));
+        postValue.append(wrapValue.toString());
+
+        postValue.deleteCharAt(postValue.length() -1 );
+        postValue.append("]}\"/>\n" +
+                "  <STRF N=\"strToken\" V=\"\"/>\n" +
+                "</CDO>\n");
+
+        postParam.put("$$CDORequest$$" , postValue );
+        HttpClientUtil.postResByUrlAndCookie(url , cookie , postParam , false  );
 
     }
 
-    public APIController(String schoolToken){
-        setSchoolToken(schoolToken);
-    }
-    public APIController(){
-        initializeSchoolCodeMap();
-    }
-    public APIController(String schoolToken ,String username , String password, AnswerOption option) throws IOException, ParserException, InterruptedException {
-        this();
-        setSchoolToken(util.getSchoolToken(username ,password));
-        if(option.equals(AnswerOption.ANSWER)){
-            doAnswer01(username , password);
-        }else if(option.equals(AnswerOption.WATCH)){
-           doWatch01(username , password);
-        }else if(option.equals(AnswerOption.WATCH_AND_ANSWER)){
-            doAnswer01(username , password);
-            doWatch01(username , password);
-        }else ;
+    private String doTestId(String testId) {
+        //http://binhai.njcedu.com/student/tc/careerPlaning/evaluationtest.htm?id=46#begin
+        String url = "http://"+this.schoolCode+".njcedu.com/student/tc/careerPlaning/evaluationtest.htm?id="+testId;
+        String cookie = getCookie();
+        HashMap<String,String> headerParam = new HashMap<String, String>();
+        headerParam.put("Referer", "http://"+this.schoolCode+".njcedu.com/student/tc/careerPlaning/evaluationlist.htm");
+        String respStr = HttpClientUtil.getResByUrlAndCookie(url , headerParam , cookie  , false);
+        return respStr;
     }
 
-    private void doWatch01(String username, String password) throws IOException, InterruptedException, ParserException {
+    private List<QuestionOption> getQuestionIds( String testIdPage) {
+        List<QuestionOption> questionIds = new ArrayList<QuestionOption>();
+        Parser parser = Parser.createParser(testIdPage, Charset.defaultCharset().toString());
+        //缓冲层 parser解析一次之后，再次解析为空
+        NodeList cacheNodeList = null;
+        try {
+            cacheNodeList = parser.parse(new NodeFilter() {
+                public boolean accept(Node node) {
+                    return true;
+                }
+            });
+        } catch (ParserException e) {
+            e.printStackTrace();
+        }
+        //startevaluation.htm TODO 完成的去重复
+        NodeFilter questionIdFilter = new NodeFilter() {
+            public boolean accept(Node node) {
+                if (node instanceof BulletList
+                        && ((BulletList) node).getAttribute("class") != null
+                        && ((BulletList) node).getAttribute("class").contains("answer")
+                        && ((BulletList) node).getAttribute("questionId") != null
+                        )
+                    return true;
+                else return false;
+            }
+        };
+
+
+
+        NodeList thatMatch = cacheNodeList.extractAllNodesThatMatch(questionIdFilter);
+        if(thatMatch != null && thatMatch.size()>0) {
+            for (int matchIndex = 0; matchIndex < thatMatch.size(); matchIndex++) {
+                Node[] questionNode = thatMatch.toNodeArray();
+                if (questionNode[matchIndex] instanceof BulletList) {
+                    BulletList questionIdNode = (BulletList) questionNode[matchIndex];
+                    int questionOptionCount = questionIdNode.getChildCount();
+                    String questionId = questionIdNode.getAttribute("questionId");
+                    if(questionOptionCount == 11){
+                        questionOptionCount = 5;
+                    }
+                    questionIds.add(
+                            QuestionOption.builder()
+                                    .questionId(questionId)
+                                    .questionOptionCount(questionOptionCount + "")
+                                    .build()
+                    );
+                }
+            }
+        }
+        return questionIds;
+
+    }
+
+    private void validateParam() {
+        if(this.lschoolId == null || this.lschoolId.equals("")){
+            throw new IllegalArgumentException("学校ID不能为空!");
+        }
+        if(this.lUserId == null || this.lUserId.equals("")){
+            throw new IllegalArgumentException("学生ID不能为空!");
+        }
+    }
+
+    private void doWatch01() throws IOException, InterruptedException, ParserException {
         //需要登录
-        log.info(username + "  开始看视频：");
-
-        String respAndCookie = getSchoolLoginUrlAndCookie(username , password);
-
-        String loginUrl = respAndCookie.split(",")[0];
-//        getSchoolCookie(loginUrl , getCookie());
+        System.out.println(this.username + "  开始看视频：");
+        getSchoolLoginUrlAndCookie();
         List<TeachPlan> plans = getTeachPlans(getCookie());
         String blankStyle = "      ";
         if(plans != null && plans.size() >0){
             for(TeachPlan plan : plans){
-                log.info(blankStyle + plan.getTaskName());
+                System.out.println(blankStyle + plan.getTaskName());
                 if(plan.getStatus().equals("进行中")){
-                    List<Exercise> exercises = this.getExercises("http://"+this.getLoginDomain()+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
+                    ExercisesAndTests exercisesAndTests = this.getExercises("http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
                             + plan.getShowPlanNumber(),  this.getCookie() );
                     //过滤出已完成的
                     float hasCompleteExercise = 1.0f;
                     long startTimeMills = System.currentTimeMillis();
-                    for(Exercise exercise : exercises){
+                    for(Exercise exercise : exercisesAndTests.getExercises()){
                         if(exercise.getStatus().contains("未完成")){
-                            // / )
-
                             int leftNumberIndex = exercise.getStatus().indexOf("（");
-
                             int indexStart = exercise.getStatus().indexOf("/ ");
                             int hasCompleteCount = Integer.valueOf(exercise.getStatus().substring(leftNumberIndex + "（".length() ,indexStart -1 ));
-
                             int indexEnd = exercise.getStatus().indexOf("）");
                             String allNeedCount = exercise.getStatus().substring(indexStart + "/ ".length(), indexEnd  ).trim();
                             int need2Complete = Integer.valueOf(allNeedCount) - hasCompleteCount;
@@ -115,7 +257,7 @@ public class APIController {
 
                             }
                         }else{
-                            log.info(exercise.getName() + " 已完成 ，自动跳过。" );
+                            System.out.println(exercise.getName() + " 已完成 ，自动跳过。" );
                         }
 
                     }
@@ -131,7 +273,7 @@ public class APIController {
                     }
 
                     //支持秒刷的业务
-                    for(Exercise exercise : exercises){
+                    for(Exercise exercise : exercisesAndTests.getExercises()){
                         if(exercise.getStatus().contains("未完成")){
                             // / )
 
@@ -154,82 +296,69 @@ public class APIController {
                                 //        Thread.sleep(30000);
                                 //支持秒刷的业务逻辑
                                 String url = "http://course.njcedu.com/Servlet/recordStudy.svl?lCourseId=" + exercise.getNumber() +
-                                        "&lSchoolId=" + this.schoolCodeMap.get(this.loginDomain) + "&strStartTime=0";
+                                        "&lSchoolId=" + this.lschoolId + "&strStartTime=0";
                                 HttpClientUtil.getResByUrlAndCookie(url, null , getCookieByMap(cookieMap), false);
                                 System.out.print(".");
                             }
                         }
                         hasCompleteExercise++;
-                        log.info(blankStyle+ blankStyle + exercise.getName()  + hasCompleteExercise / exercises.size() * 100 +"%" );
+                        System.out.println(blankStyle+ blankStyle + exercise.getName()  + hasCompleteExercise / exercisesAndTests.getExercises().size() * 100 +"%" );
                     }
 
                 }else{
-                    log.info("看视频 "+ plan.getTaskName() + " 已完成 ，自动跳过。");
+                    System.out.println("看视频 "+ plan.getTaskName() + " 已完成 ，自动跳过。");
                 }
             }
         }
     }
 
-    private void doAnswer01(String username , String password) throws IOException, ParserException {
+    private void doAnswer01() throws IOException, ParserException {
         //需要登录
         String blankStyle = "      ";
-        log.info(username + "  开始做试题：");
-        getSchoolLoginUrlAndCookie(username , password) ;
+        System.out.println(this.username + "  开始做试题：");
+        getSchoolLoginUrlAndCookie() ;
         List<TeachPlan> plans = getTeachPlans(getCookie());
         if(plans != null && plans.size() >0){
 
             for(TeachPlan plan : plans){
-                log.info( blankStyle + plan.getTaskName());
+                System.out.println( blankStyle + plan.getTaskName());
                 if(plan.getStatus().equals("进行中")){
-                    List<Exercise> exercises = this.getExercises("http://"+this.getLoginDomain()+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
+                    ExercisesAndTests exercisesAndTests = this.getExercises("http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
                             + plan.getShowPlanNumber(),  this.getCookie() );
+
+                    if(exercisesAndTests.getTests() != null && exercisesAndTests.getTests().size()>0){
+                        tests.addAll(exercisesAndTests.getTests());
+                    }
                     //过滤出已完成的
                     float hasCompleteExercise = 1.0f;
-                    for(Exercise exercise : exercises){
+                    for(Exercise exercise : exercisesAndTests.getExercises()){
 //                        log.info(exercise.getName());
                         if(!exercise.getRightPercent().equals("100.0%") && !exercise.getRightPercent().equals("-/-") ){
                             List<Question> questions = this.getQuestionByCourseId(exercise.getNumber() ,  this.getCookie());
                             this.doAnswer(this.getCookie() , exercise.getNumber() , questions);
                         }
                         hasCompleteExercise++;
-                        log.info(blankStyle + blankStyle + exercise.getName() );
-                        log.info( blankStyle + blankStyle + hasCompleteExercise / exercises.size() * 100 +"%");
+                        System.out.println(blankStyle + blankStyle + exercise.getName() );
+                        System.out.println( blankStyle + blankStyle + hasCompleteExercise / exercisesAndTests.getExercises().size() * 100 +"%");
                     }
                 }else{
-                    log.info("做试题 "+plan.getTaskName() + " 已完成 ，自动跳过。");
+                    System.out.println("做试题 "+plan.getTaskName() + " 已完成 ，自动跳过。");
                 }
             }
         }
     }
 
-    public String getLoginDomain() {
-        return loginDomain;
-    }
-
-    public void setLoginDomain(String loginDomain) {
-        this.loginDomain = loginDomain;
-    }
-
-    private String loginDomain = null ;
     /**
      * 全局登录 锦成
      *
-     * @param username
-     * @param password
-     * @throws IOException
      */
-    public String getSchoolLoginUrlAndCookie(String username, String password) throws IOException {
+    public String getSchoolLoginUrlAndCookie() throws IOException {
         if(!username.contains("-")){
-            log.log(Level.WARNING , "username must be contains - " );
+            System.out.println("username must be contains - " );
             return null;
         }
-        this.loginDomain = username.split("-")[0];
         String loginUrl = "http://sso.njcedu.com/handleTrans.cdo?strServiceName=UserService&strTransName=SSOLogin";
         HashMap<String, String> params = new HashMap<String, String>();
-        if(!schoolCodeMap.containsKey(this.loginDomain)){
-            log.log(Level.WARNING , "schooldId is not configured , please configure it later ,  " + this.loginDomain);
-            return null;
-        }
         params.put("$$CDORequest$$", buildLoginParam(username , password));
         String respAndCookie = HttpClientUtil.postResByUrlAndCookie(loginUrl, null, params, true);
         String resp = respAndCookie.split("#")[0];
@@ -253,7 +382,7 @@ public class APIController {
                 "  <STRF N=\"strVerifyCode\" V=\"\"/>\n" +
                 "  <STRF N=\"bIsCookieLogin\" V=\"change\"/>\n" +
                 "  <STRF N=\"Sessioncheck\" V=\"sessionErr\"/>\n" +
-                "  <LF N=\"lSchoolId\" V=\""+schoolCodeMap.get(this.loginDomain)+"\"/>\n" +
+                "  <LF N=\"lSchoolId\" V=\""+this.lschoolId+"\"/>\n" +
                 "  <LF N=\"lEduId\" V=\"0\"/>\n" +
                 "</CDO>\n";
     }
@@ -278,28 +407,8 @@ public class APIController {
         }
     }
 
-
-//    public String getSchoolCookie(String url, String cookie) throws IOException {
-//
-//
-////        String loginUrl = respStr.substring(respStr.indexOf("http:") +1 , respStr.indexOf("<"));
-//
-//        url = url.replace("|","%7c") + "&jsonpCallback=callback&_="+System.currentTimeMillis();
-//
-//        Map<String , String> headerPrams = new HashMap<String, String>();
-//        headerPrams.put(Constant.USER_AGENT , Constant.MAC_USER_AGENT);
-//        headerPrams.put(Constant.REFERER ,  " http://sso.njcedu.com/login.htm?domain="+loginDomain+".njcedu.com");
-//
-//        String respStr = HttpClientUtil.getResByUrlAndCookie(url, headerPrams , getCookie(), true);
-//
-//
-//        rebuildCookieMap(respStr.split("#")[1]);
-//
-//        return null;
-//    }
-
     public List<TeachPlan> getTeachPlans(String cookie) throws IOException, ParserException {
-        String teachPlanUrl = "http://"+this.loginDomain+".njcedu.com/student/prese/teachplan/index.htm";
+        String teachPlanUrl = "http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/index.htm";
         String respStr = HttpClientUtil.getResByUrlAndCookie(teachPlanUrl,  null , cookie, false);
         Parser parser = Parser.createParser(respStr, Charset.defaultCharset().toString());
         //缓冲层 parser解析一次之后，再次解析为空
@@ -394,8 +503,12 @@ public class APIController {
     /**
      * @return
      */
-    public List<Exercise> getExercises(String url, String cookie) throws IOException, ParserException {
+    public ExercisesAndTests getExercises(String url, String cookie) throws IOException, ParserException {
+        ExercisesAndTests exercisesAndTests = new ExercisesAndTests();
+
         String respStr = HttpClientUtil.getResByUrlAndCookie(url, null ,  cookie, false);
+
+
         Parser parser = Parser.createParser(respStr, Charset.defaultCharset().toString());
         //id courseTable
         NodeFilter tableIdFilter = createTableIdFilter("courseTable");
@@ -409,8 +522,56 @@ public class APIController {
                 .extractAllNodesThatMatch(heightEqualsFilter, true)
                 .extractAllNodesThatMatch(tableColumnFilter, true);
         List<Exercise> exercises = populateNodeList2Exercises(exerciseColumns);
-        ;
-        return exercises;
+        exercisesAndTests.setExercises(exercises);
+
+        //获取指定课程下的测评
+        List<Test> planTests = getPlanTest(respStr);
+        exercisesAndTests.setTests(planTests);
+
+
+        return exercisesAndTests;
+    }
+
+    private List<Test> getPlanTest(String respStr) {
+        List<Test> tests = new ArrayList<Test>();
+        //
+        final String idFilterStr = "/student/tc/careerPlaning/careerEvalutionBak.htm?id=";
+        Parser parser = Parser.createParser(respStr, Charset.defaultCharset().toString());
+
+        NodeFilter testIdFitler = new NodeFilter() {
+            @Override
+            public boolean accept(Node node) {
+                if(node instanceof LinkTag
+                        && ((LinkTag) node).getAttribute("onclick") != null
+                        &&  ((LinkTag) node).getAttribute("onclick").contains(idFilterStr)){
+                    return true;
+                }else
+                return false;
+            }
+        };
+
+        try {
+            NodeList testList = parser.parse(testIdFitler);
+
+            if(testList != null && testList.size()>0){
+                for(Node node : testList.toNodeArray()){
+                    if(node instanceof LinkTag){
+                        String wholeUrl = ((LinkTag) node).getAttribute("onclick");
+
+                        String id = "window.open('/student/tc/careerPlaning/careerEvalutionBak.htm?id=";
+                        int idStart = wholeUrl.indexOf(id);
+                        int idEnd = wholeUrl.indexOf("'" , idStart + id.length());
+                        int originTestId = Integer.valueOf(wholeUrl.substring(idStart + id.length() , idEnd));
+                        tests.add(Test.builder()
+                        .id(originTestId).build());
+                    }
+                }
+            }
+        } catch (ParserException e) {
+            e.printStackTrace();
+        }
+        return tests;
+
     }
 
     private List<Exercise> populateNodeList2Exercises(NodeList exerciseColumns) {
@@ -642,14 +803,14 @@ public class APIController {
                 "  <CDOAF N=\"answerArrayList\">\n";
         StringBuffer sb = new StringBuffer(prefix);
         int questionSize = questions.size();
-        String prefixFormated = String.format(sb.toString(), lUserId, schoolCodeMap.get(this.loginDomain), courseId, questionSize);
+        String prefixFormated = String.format(sb.toString(), lUserId, this.lschoolId, courseId, questionSize);
 
         sb = new StringBuffer();
         sb.append(prefixFormated);
         for (int i = 0; i < questionSize; i++) {
             Question currentQuestion = questions.get(i);
 
-            List<Map<String, String>> questionRepository = JacksonUtil.answersCache;
+            List<Map<String, String>> questionRepository = answersCache;
 
             String answer = "";
             for (Map<String, String> map : questionRepository) {
@@ -742,9 +903,8 @@ public class APIController {
         return cookieStr.toString();
     }
 
-    public String setSchoolToken(String schoolToken){
+    public void appendSchoolToken2CookieMap(String schoolToken){
             cookieMap.put(CookieConstant.SCHOOL_TOKEN , schoolToken);
-            return null;
     }
 
     public String getCookie(){
@@ -802,6 +962,8 @@ public class APIController {
         }
     }
 
+
+
 }
 
 class CookieConstant {
@@ -812,10 +974,8 @@ class CookieConstant {
 
 }
 
-class Constant{
-    public static String USER_AGENT = "User-Agent";
-    public static String REFERER = "Referer";
-    public static String MAC_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:61.0) Gecko/20100101 Firefox/61.0";
-}
+
+
+
 
 

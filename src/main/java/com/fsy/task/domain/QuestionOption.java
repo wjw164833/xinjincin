@@ -7,9 +7,10 @@ import lombok.*;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class QuestionOption {
 
-    private String text;
+    private String questionId;
 
-    private String name;
+    private String questionOptionCount;
 }

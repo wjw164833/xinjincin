@@ -15,15 +15,5 @@ import java.util.Map;
 
 public class JacksonUtil {
 
-    private static ObjectMapper objectMapper = new ObjectMapper();
-
-    public static List<Map<String,String>> answersCache = null;
-
-    public static List<Map<String,String>> getQuestions(String questionFilePath) throws IOException {
-        List<Map<String,String>> questions = JacksonUtil.objectMapper.readValue(
-                new File(questionFilePath)
-                , List.class);
-        answersCache = questions;
-        return questions;
-    }
+    public static ObjectMapper objectMapper = new ObjectMapper();
 }

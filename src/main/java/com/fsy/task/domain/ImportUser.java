@@ -13,7 +13,4 @@ public class ImportUser {
 
     private String password;
 
-    private String schoolToken ;
-
-
 }

@@ -28,7 +28,7 @@
                     <archive>
                         <manifest>
                             <!-- 此处指定main方法入口的class -->
-                            <mainClass>com.fsy.task.gui.LoginFrame</mainClass>
+                            <mainClass>com.fsy.task.gui.Main</mainClass>
                         </manifest>
                     </archive>
                     </configuration>

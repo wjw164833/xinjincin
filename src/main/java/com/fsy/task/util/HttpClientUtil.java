@@ -5,6 +5,7 @@ import org.apache.commons.codec.binary.StringUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
+import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -17,6 +18,7 @@ import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 public class HttpClientUtil {
-    public static String getResByUrlAndCookie(String url , Map<String,String> headerParams , String cookie , boolean getCookie) throws IOException {
+    public static String getResByUrlAndCookie(String url , Map<String,String> headerParams , String cookie , boolean getCookie)  {
         CloseableHttpClient httpclient = HttpClients.createDefault();
         HttpGet httpGet = new HttpGet(url);
         Header header = new BasicHeader("Cookie",cookie);
@@ -35,25 +37,34 @@ public class HttpClientUtil {
                 httpGet.addHeader(basicHeader);
             }
         }
-        CloseableHttpResponse response2 = httpclient.execute(httpGet);
-        HttpEntity entity2 = response2.getEntity();
-        String respStr = EntityUtils.toString(entity2 , Charset.defaultCharset());
-        Header [] cookies = response2.getHeaders("Set-Cookie");
-        StringBuffer cookieStr = new StringBuffer();
-        if(cookies != null && cookies.length != 0){
-            for(Header cookHeader : cookies){
-                cookieStr.append(cookHeader.getValue() + ";");
+        CloseableHttpResponse response2 = null;
+        try {
+            response2 = httpclient.execute(httpGet);
+
+            HttpEntity entity2 = response2.getEntity();
+            String respStr = EntityUtils.toString(entity2 , Charset.defaultCharset());
+            Header [] cookies = response2.getHeaders("Set-Cookie");
+            StringBuffer cookieStr = new StringBuffer();
+            if(cookies != null && cookies.length != 0){
+                for(Header cookHeader : cookies){
+                    cookieStr.append(cookHeader.getValue() + ";");
+                }
             }
+            response2.close();
+
+            if(getCookie){
+                return respStr + "#" + cookieStr.toString();
+            }else{
+                return respStr;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        response2.close();
-        if(getCookie){
-            return respStr + "#" + cookieStr.toString();
-        }else{
-            return respStr;
-        }
+        return null;
+
     }
 
-    public static String postResByUrlAndCookie(String url , String cookie,Map<String,String> params , Boolean getCookie) throws IOException {
+    public static String postResByUrlAndCookie(String url , String cookie,Map<String,String> params , Boolean getCookie) {
         CloseableHttpClient httpclient = HttpClients.createDefault();
         HttpPost httPost = new HttpPost(url);
         List<NameValuePair> nvps = new ArrayList<NameValuePair>();
@@ -75,28 +86,37 @@ public class HttpClientUtil {
 
         httPost.addHeader(referHeader);
         httPost.addHeader(header);
-        httPost.setEntity(new UrlEncodedFormEntity(nvps));
-
-        CloseableHttpResponse response2 = httpclient.execute(httPost);
-        Header [] cookies = response2.getHeaders("Set-Cookie");
-        StringBuffer cookieStr = new StringBuffer();
-        if(cookies != null && cookies.length != 0){
-            for(Header cookHeader : cookies){
-                cookieStr.append(cookHeader.getValue() + ";");
+        try {
+            httPost.setEntity(new UrlEncodedFormEntity(nvps));
+            CloseableHttpResponse response2 = httpclient.execute(httPost);
+            Header [] cookies = response2.getHeaders("Set-Cookie");
+            StringBuffer cookieStr = new StringBuffer();
+            if(cookies != null && cookies.length != 0){
+                for(Header cookHeader : cookies){
+                    cookieStr.append(cookHeader.getValue() + ";");
+                }
             }
+
+            HttpEntity entity2 = response2.getEntity();
+            // do something useful with the response body
+            // and ensure it is fully consumed
+
+            String respStr = EntityUtils.toString(entity2 , Charset.defaultCharset());
+            if(getCookie){
+                return respStr + "#" + cookieStr.toString();
+            }
+
+            response2.close();
+
+            return respStr;
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        } catch (ClientProtocolException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+        return null;
 
-        HttpEntity entity2 = response2.getEntity();
-        // do something useful with the response body
-        // and ensure it is fully consumed
-
-        String respStr = EntityUtils.toString(entity2 , Charset.defaultCharset());
-        if(getCookie){
-            return respStr + "#" + cookieStr.toString();
-        }
-
-        response2.close();
-
-        return respStr;
     }
 }

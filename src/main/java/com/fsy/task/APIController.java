@@ -89,6 +89,11 @@ public class APIController {
      * @param options 选项的个数 影响答题 该题目的id
      */
     private void publishTestEvent(String schoolId , String userId , String nickName , String testId ,List<QuestionOption> options){
+
+        if(options == null || options.size()==0){
+            System.out.println("获取该测评id选项失败:"+ testId  + "\n请联系管理员排除bug");
+            throw new IllegalArgumentException("获取该测评id选项失败:"+ testId );
+        }
         String url = "http://"+this.schoolCode+".njcedu.com/student/tc/careerPlaning/handleTrans.cdo?strServiceName=EvalutionService&strTransName=addEvaluationResult";
         String cookie = getCookie();
         HashMap postParam = new HashMap();
@@ -115,6 +120,9 @@ public class APIController {
             if(currentOption.getQuestionOptionCount().equals("2") ){
                 option = "A,B";
                 answer = "1,0";
+            }else if(currentOption.getQuestionOptionCount().equals("3")){
+                option = "A,B,C";
+                answer = "1,0,0";
             }else if(currentOption.getQuestionOptionCount().equals("5")){
                 option = "A,B,C,D,E";
                 answer = "1,0,0,0,0";
@@ -176,7 +184,7 @@ public class APIController {
             public boolean accept(Node node) {
                 if (node instanceof BulletList
                         && ((BulletList) node).getAttribute("class") != null
-                        && ((BulletList) node).getAttribute("class").contains("answer")
+                        && ((BulletList) node).getAttribute("class").contains("nswer")
                         && ((BulletList) node).getAttribute("questionId") != null
                         )
                     return true;
@@ -192,11 +200,13 @@ public class APIController {
                 Node[] questionNode = thatMatch.toNodeArray();
                 if (questionNode[matchIndex] instanceof BulletList) {
                     BulletList questionIdNode = (BulletList) questionNode[matchIndex];
-                    int questionOptionCount = questionIdNode.getChildCount();
+
+                    int questionOptionCount = (int) Arrays.asList(questionIdNode.getChildren().toNodeArray()).stream()
+                            .filter((Node node)->{
+                        return node instanceof Bullet;
+                            }).count();
                     String questionId = questionIdNode.getAttribute("questionId");
-                    if(questionOptionCount == 11){
-                        questionOptionCount = 5;
-                    }
+
                     questionIds.add(
                             QuestionOption.builder()
                                     .questionId(questionId)

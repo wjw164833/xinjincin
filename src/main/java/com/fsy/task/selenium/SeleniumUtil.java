@@ -17,7 +17,8 @@ import java.util.Map;
 public class SeleniumUtil {
 
     public static void main(String[] args) {
-        User user = new SeleniumUtil().getUser("gzife-20171061130320" , "123456");
+        //yau-1020616014027 123456
+        User user = new SeleniumUtil().getUser("yau-1020616014027" , "123456");
         return;
     }
     public User getUser(String username , String password){

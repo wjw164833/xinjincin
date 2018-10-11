@@ -70,14 +70,65 @@ public class APIController {
     private void preTest() {
         if(tests != null && tests.size()>0){
             for(Test test:tests){
+                if(test.getId() == 7){
+                    //DISC人格测验
+                    String testIdPage = doTestId(test.getId()+"");
+                    List<QuestionOption> questionOptions = getQuestionIds(testIdPage , true);
+                    做第七题(lschoolId, lUserId, this.nickName.trim(), test.getId() +"", questionOptions);
+                    continue;
+                }
                 String testIdPage = doTestId(test.getId()+"");
-                List<QuestionOption> questionOptions = getQuestionIds(testIdPage);
+                List<QuestionOption> questionOptions = getQuestionIds(testIdPage , false);
                 publishTestEvent(lschoolId, lUserId, this.nickName, test.getId() +"", questionOptions);
                 System.out.println(this.nickName + "  测评" + test.getId() + " 通过");
             }
         }else{
             System.out.println(this.nickName + "没有测评" + " 跳过");
         }
+    }
+
+    private void 做第七题(String lschoolId, String lUserId, String nickName, String s, List<QuestionOption> options) {
+        String testId = "7";
+        if(options == null || options.size()==0){
+            System.out.println("获取该测评id选项失败:"+ testId  + "\n请联系管理员排除bug");
+            throw new IllegalArgumentException("获取该测评id选项失败:"+ testId );
+        }
+        String url = "http://"+this.schoolCode+".njcedu.com/student/tc/careerPlaning/handleTrans.cdo?strServiceName=EvalutionService&strTransName=addEvaluationResult";
+        String cookie = getCookie();
+        HashMap postParam = new HashMap();
+        StringBuffer postValue = new StringBuffer();
+        String originalId = testId;
+        postValue.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "\n" +
+                "<CDO>\n" +
+                "  <STRF N=\"strServiceName\" V=\"EvalutionService\"/>\n" +
+                "  <STRF N=\"strTransName\" V=\"addEvaluationResult\"/>\n" +
+                "  <LF N=\"lSchoolId\" V=\""+lschoolId+"\"/>\n" +
+                "  <LF N=\"lUserId\" V=\""+lUserId+"\"/>\n" +
+                "  <STRF N=\"strUserName\" V=\""+nickName+"\"/>\n" +
+                "  <LF N=\"lEvaluationId\" V=\""+originalId+"\"/>\n" +
+                "  <STRF N=\"strAnswer\" V=\"{answers:[\n");
+
+        StringBuffer wrapValue = new StringBuffer();
+        for(int i = 0 ; i <options.size() ; i++)
+        {
+            QuestionOption currentOption = options.get(i);
+            String option = "A1,A2,B1,B2,C1,C2,D1,D2";
+            String answer = "1,0,0,1,0,0,0,0";
+            //{index:"1",lQuestionId:"2005",type:"0",options:"A,B,C,D,E",answer:"1,0,0,0,0",checkOptions:"A",checkAnswers:"1"}
+            wrapValue.append("{index:\""+(i+1)+"\",lQuestionId:\""+currentOption.getQuestionId()+"\",type:\"2\",options:\""+option+"\",answer:\""+answer+"\",checkOptions:\"A1,B2\",checkAnswers:\"1,1\"}" + ",");
+        }
+        //" to &quot;
+        wrapValue = new StringBuffer(wrapValue.toString().replaceAll("\"" , "&quot;"));
+        postValue.append(wrapValue.toString());
+
+        postValue.deleteCharAt(postValue.length() -1 );
+        postValue.append("]}\"/>\n" +
+                "  <STRF N=\"strToken\" V=\"\"/>\n" +
+                "</CDO>\n");
+
+        postParam.put("$$CDORequest$$" , postValue );
+        HttpClientUtil.postResByUrlAndCookie(url , cookie , postParam , false  );
     }
 
     /**
@@ -165,7 +216,8 @@ public class APIController {
         return respStr;
     }
 
-    private List<QuestionOption> getQuestionIds( String testIdPage) {
+    //是否是第七题 比较特殊
+    private List<QuestionOption> getQuestionIds( String testIdPage , boolean isSeven) {
         List<QuestionOption> questionIds = new ArrayList<QuestionOption>();
         Parser parser = Parser.createParser(testIdPage, Charset.defaultCharset().toString());
         //缓冲层 parser解析一次之后，再次解析为空
@@ -194,7 +246,25 @@ public class APIController {
 
 
 
-        NodeList thatMatch = cacheNodeList.extractAllNodesThatMatch(questionIdFilter);
+
+
+        NodeList thatMatch = null ;
+        if(!isSeven){
+            thatMatch = cacheNodeList.extractAllNodesThatMatch(questionIdFilter);
+        }else{
+            NodeFilter questionId2Filter = new NodeFilter() {
+                public boolean accept(Node node) {
+                    if (node instanceof BulletList
+                            && ((BulletList) node).getAttribute("class") != null
+                            && ((BulletList) node).getAttribute("class").contains("faceSubject")
+                            && ((BulletList) node).getAttribute("questionid") != null
+                            )
+                        return true;
+                    else return false;
+                }
+            };
+            thatMatch = cacheNodeList.extractAllNodesThatMatch(questionId2Filter);
+        }
         if(thatMatch != null && thatMatch.size()>0) {
             for (int matchIndex = 0; matchIndex < thatMatch.size(); matchIndex++) {
                 Node[] questionNode = thatMatch.toNodeArray();
@@ -363,10 +433,6 @@ public class APIController {
      *
      */
     public String getSchoolLoginUrlAndCookie() throws IOException {
-        if(!username.contains("-")){
-            System.out.println("username must be contains - " );
-            return null;
-        }
         String loginUrl = "http://sso.njcedu.com/handleTrans.cdo?strServiceName=UserService&strTransName=SSOLogin";
         HashMap<String, String> params = new HashMap<String, String>();
         params.put("$$CDORequest$$", buildLoginParam(username , password));

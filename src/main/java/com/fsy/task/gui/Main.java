@@ -143,6 +143,10 @@ public class Main extends javax.swing.JFrame {
 
     private void startDo() {
         Constant.TIMEOUT = Integer.valueOf(this.timeoutField.getText().toString());
+        if(APIController.userList == null && APIController.userList.size() ==0){
+            System.out.println("未导入学生信息");
+            return;
+        }else
         for(ImportUser user : APIController.userList){
             try {
                 new APIController(  user.getUsername() , user.getPassword());

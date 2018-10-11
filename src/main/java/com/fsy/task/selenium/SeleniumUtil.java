@@ -41,6 +41,10 @@ public class SeleniumUtil {
 
         WebDriverWait webDriverWait=new WebDriverWait(firefoxDriver,5);
 
+        WebElement agreeButton = firefoxDriver.findElement(By.className("agree_btn"));
+
+        agreeButton.click();
+
 
         WebElement e= firefoxDriver.findElement(By.id("password"));
 
@@ -74,12 +78,18 @@ public class SeleniumUtil {
 
 
 //        System.out.println("获取到token:" + schoolToken );
+
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e2) {
+            e2.printStackTrace();
+        }
         String userSchoolId = firefoxDriver.getPageSource();
 
 
         String nickName = firefoxDriver.findElementByXPath("/html/body/span[1]/div/ul/li[2]/div[4]").getText().split(",")[1];
 
-//        firefoxDriver.quit();
+        firefoxDriver.quit();
 //        firefoxDriver.close();
 
         User user =  User.builder()

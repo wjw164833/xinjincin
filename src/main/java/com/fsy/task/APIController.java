@@ -1,19 +1,37 @@
 package com.fsy.task;
 
+import com.alibaba.fastjson.JSON;
 import com.fsy.task.domain.*;
+import com.fsy.task.dto.QuestionAnswerDto;
 import com.fsy.task.selenium.SeleniumUtil;
+import com.fsy.task.util.CollectionsUtil;
 import com.fsy.task.util.HttpClientUtil;
-import com.fsy.task.util.JacksonUtil;
 import com.fsy.task.util.MD5Util;
+import com.fsy.task.util.StringUtils;
+import com.google.common.io.Files;
+import org.apache.http.client.CookieStore;
+import org.apache.http.client.HttpClient;
+import org.apache.http.impl.client.BasicCookieStore;
+import org.apache.http.impl.client.HttpClients;
 import org.htmlparser.Node;
 import org.htmlparser.NodeFilter;
 import org.htmlparser.Parser;
 import org.htmlparser.tags.*;
 import org.htmlparser.util.NodeList;
 import org.htmlparser.util.ParserException;
-import java.io.IOException;
+import org.jsoup.Jsoup;
+import org.jsoup.helper.StringUtil;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import java.io.*;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class APIController {
 
@@ -41,8 +59,64 @@ public class APIController {
 
     private String nickName = "xiao xiao hai ";
 
+    private CookieStore cookieStore = new BasicCookieStore();
+
+    private HttpClient client = HttpClients.custom().setDefaultCookieStore(cookieStore).build();
+
+    private static HashMap<String,String> zhuGaunAnswerCache = new HashMap<>();
+    private static HashMap<String,String> answersCacheIdAnswerMap = new HashMap<>();
+    static {
+        try {
+            //导入主观题答案
+            URL url = ClassLoader.getSystemResource("zgtda");
+            File file = new File(url.getFile());
+            if(file.exists() && file.isDirectory()) {
+                Arrays.stream(file.list((File tempFile, String name) -> {
+                    return Pattern.compile("(\\d{4})\\.txt").matcher(name).find();
+                })).map((String str)->{
+                    return  new File(file.getAbsolutePath() +"/"+str);
+                })
+            .forEach((File f)-> {
+                            try {
+                                //可以使用files方法files.lines()
+                                BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f) ,Charset.forName("GBK") ));
+                                String content = br.lines().collect(Collectors.joining());
+                                Matcher m = Pattern.compile("(\\d{4}).txt").matcher(f.getName());
+                                m.find();
+                                zhuGaunAnswerCache.put(m.group(1),content);
+                                System.out.println(zhuGaunAnswerCache.get(m.group(1)));
+                            } catch (FileNotFoundException e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                );
+
+
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+
+
+
+
+    }
     public APIController(String username , String password) throws IOException, ParserException, InterruptedException {
-        User user = seleniumUtil.getUser(username , password);
+        //modified for 去selenium代之以cookiestore by fushiyong at 2018-12-18  17:30 start
+                User user = seleniumUtil.getUser(username , password);
+
+//        User user =  User.builder()
+//                .username(username)
+//                .password(password)
+//                .userId(getUserId(userSchoolId))
+//                .schoolId(getSchoolId(userSchoolId))
+//                .schoolCode(username.split("-")[0])
+//                .schoolToken(schoolToken)
+//                .nickName(nickName)
+//                .build();
+        //modified for 去selenium代之以cookiestore by fushiyong at 2018-12-18  17:30 end
+
 
         this.nickName = user.getNickName();
 
@@ -61,10 +135,223 @@ public class APIController {
 
         appendSchoolToken2CookieMap(user.getSchoolToken());
         doAnswer01();
-        doWatch01();
+
+        //登录获取cookie
+        getSchoolLoginUrlAndCookie();
+//        doWatch01();
 
         //测评准备工作
-        preTest();
+//        preTest();
+
+
+    }
+
+    /**
+     *
+     * 考试列表页面全部做掉
+     */
+    private void doExam() {
+
+        String examListHtml = getExamListHtml();
+        List<ExamDto> examDtos = parseExamListHtml(examListHtml);
+        if(!CollectionsUtil.isEmpty(examDtos)){
+
+
+            examDtos.parallelStream().filter((ExamDto examDto)->{
+                return examDto.getScore().contains("--");
+            }).map((ExamDto examDto)->{
+                String [] urlSplited = examDto.getUrl().split("=");
+                return urlSplited[urlSplited.length -1 ];
+            }).forEach((String examId)->{
+
+//                String checkResp = checkCourseRate(examId);
+//                System.out.println("检查试卷是否可以考试返回:"+checkResp);
+//
+//                String examHtml = getExamHtml(examId);
+//
+//                //选择题解析
+//                HashMap<String,String> xuanZeMap = getXuanZeTiMap(examHtml);
+//                if(!checkResp.equals("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"-1\"/><STRF N=\"strText\" V=\"0\"/><STRF N=\"strInfo\" V=\"\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>")){
+//                    //可以考试
+//                    String answer = "";
+//                    for (Map<String, String> map : answersCache) {
+//                        //取部分标题
+//                        if(xuanZeMap.containsKey(map.get("title"))){
+//                            answer = map.get("answer");
+//                            System.out.println(map.get("title")+"找到答案:"+answer);
+//                        }
+//                    }
+//
+//                }
+//                //主观题解析
+//                HashMap<String,String> zhuGuanMap = getZhuGuanQueMap(examHtml);
+//                //主观题
+//                postZhuGaunQue(examId ,planNo ,  zhuGuanMap);
+
+
+
+
+            });
+        }
+    }
+
+    /**
+     *
+     * @param examId
+     * @param planId
+     * @param examMap key为标题　　value为问题id
+     */
+    private void postZhuGaunQue(String examId,String planId ,HashMap<String,String> examMap ) {
+
+
+        String postUrl = "http://"+this.schoolCode+".njcedu.com/student/prese/examin/handleTrans.cdo?strServiceName=StudentExminService&strTransName=commitPager";
+//        HashMap<String,String> headerMap = new HashMap<>();
+//        headerMap.put("Content-Type","application/x-www-form-urlencoded;charset=utf-8");
+//        headerMap.put("Referer","http://"+schoolCode+".njcedu.com/student/prese/examin/pager.htm?lId=29270000074&nExaminType=0");
+//        headerMap.put("User-Agent","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:64.0) Gecko/20100101 Firefox/64.0");
+
+        HashMap<String,String> postParam = new HashMap<>();
+        List<QuestionAnswerDto> zhuGuanAnswer = new ArrayList<>();
+
+        for(Map.Entry<String,String> entry : examMap.entrySet()){
+            if(zhuGaunAnswerCache.containsKey(entry.getValue())){
+                zhuGuanAnswer.add(QuestionAnswerDto.builder()
+                                    .answer(zhuGaunAnswerCache.get(entry.getValue()))
+                                    .questionid(entry.getValue())
+                                    .build()
+                );
+            }
+        }
+        String postJson = JSON.toJSONString(zhuGuanAnswer);
+        String postValue = "<CDO>\n" +
+                "    <STRF N=\"$strDestNodeName$\" V=\"TeachingBusiness\"/>\n" +
+                "    <STRF N=\"strServiceName\" V=\"StudentExminService\"/>\n" +
+                "    <STRF N=\"strTransName\" V=\"commitPager\"/>\n" +
+                "    <LF N=\"lSchoolId\" V=\""+lschoolId+"\"/>\n" +
+                "    <LF N=\"lUserId\" V=\""+lUserId+"\"/>\n" +
+                "    <LF N=\"lExaminId\" V=\""+examId+"\"/>\n" +
+                "    <LF N=\"lPlanId\" V=\""+planId+"\"/>\n" +
+                "    <LF N=\"nExaminType\" V=\"0\"/>\n" +
+                "    <STRF N=\"strAnswer1\" V=\""+postJson+"\"/>\n" +
+                "    <NF N=\"nCommitType\" V=\"1\"/>\n" +
+                "    <STRF N=\"strToken\" V=\"\"/>\n" +
+                "</CDO>";
+        postParam.put("$$CDORequest$$" , postValue);
+        String resp = HttpClientUtil.postResByUrlAndCookie(postUrl , getCookie() , postParam , false);
+        System.out.println(resp);
+        if(isSuccess(resp)){
+            System.out.println("成功");
+        }else{
+            System.out.println("失败");
+        }
+    }
+
+    private boolean isSuccess(String resp) {
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"0\"/><STRF N=\"strText\" V=\"OK\"/><STRF N=\"strInfo\" V=\"OK\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>".equals(resp);
+    }
+
+    private HashMap<String, String> getZhuGuanQueMap(String examHtml) {
+        //li class=\"ks_tm mb10\
+        HashMap<String,String> result = new HashMap<>();
+        Document document = Jsoup.parse(examHtml);
+        Elements elements = document.select("li[class=ks_tm mb10]");
+        for(int i=0;i<elements.size();i++){
+            Element ele = elements.get(i);
+            result.put(ele.text() , ele.attr("id"));
+
+        }
+        return result;
+    }
+
+    /**
+     *
+     * @param examHtml
+     * @return key -> 问题标题　value -> 问题ID
+     */
+    private HashMap<String, String> getXuanZeTiMap(String examHtml) {
+        //启用编程语言pattern match 模式匹配语言特性
+        String regex = "title:\"(.*?)\",options:\\[.*?\\s+showQuestion\\(jsonQuestion,(\\d{4}),";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(examHtml);
+
+        //key -> 问题标题　value -> 问题ID
+        HashMap<String,String> questionMap = new HashMap<>();
+        while(matcher.find()){
+            questionMap.put(matcher.group(1) , matcher.group(2));
+        }
+        return questionMap;
+    }
+
+    private String getExamHtml(String examId) {
+        String examUrl = "http://"+schoolCode+".njcedu.com/student/prese/examin/pager.htm?lId="+examId+"&nExaminType=0";
+        String cookie = getCookie();
+        HashMap<String,String> headerParam = new HashMap<String, String>();
+        headerParam.put("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:64.0) Gecko/20100101 Firefox/64.0");
+        String examHtml = HttpClientUtil.getResByUrlAndCookie(examUrl , headerParam , cookie , false );
+        return examHtml;
+    }
+
+    /**
+     *
+     * @param examId 37270000020
+     */
+    private String checkCourseRate(String examId) {
+        String checkCourseRateUrl = "http://"+schoolCode+".njcedu.com/student/prese/examin/handleTrans.cdo?strServiceName=StudentExminService&strTransName=chknCourseRate";
+        String cookie = getCookie();
+        Map<String,String> postMap  = new HashMap<>();
+        String postValue =  "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "\n" +
+                "<CDO>\n" +
+                "  <STRF N=\"strServiceName\" V=\"StudentExminService\"/>\n" +
+                "  <STRF N=\"strTransName\" V=\"chknCourseRate\"/>\n" +
+                "  <LF N=\"lSchoolId\" V=\""+lschoolId+"\"/>\n" +
+                "  <LF N=\"lUserId\" V=\""+lUserId+"\"/>\n" +
+                "  <LF N=\"lPlanId\" V=\""+examId+"\"/>\n" +
+                "  <NF N=\"nCourseRate\" V=\"90\"/>\n" +
+                "</CDO>\n";
+
+        postMap.put("$$CDORequest$$" , postValue);
+        return HttpClientUtil.postResByUrlAndCookie(checkCourseRateUrl , cookie , postMap , false);
+
+    }
+
+    private List<ExamDto> parseExamListHtml(String examListHtml) {
+        List<ExamDto> examDtos = new ArrayList<>();
+        Document doc = Jsoup.parse(examListHtml);
+        Elements eles = doc.select("td[style=padding-left:10px; color:#333;]");
+        ExamDto examDto = new ExamDto();
+        for(int i= 0 ; i<eles.size();i++){
+            if(i%6 == 0){
+                examDto.setName(eles.get(i).text());
+            }else if(i%6 == 1){
+                examDto.setValidTime(eles.get(i).text());
+            }else if(i%6 == 2){
+                examDto.setStatus(eles.get(i).text());
+            }else if(i%6 == 3){
+                examDto.setCanKaoStatus(eles.get(i).text());
+            }else if(i % 6 == 4){
+                examDto.setScore(eles.get(i).text());
+            }else if( i % 6 == 5){
+                examDto.setUrl(eles.get(i).select("a").attr("href"));
+                examDtos.add(examDto);
+                examDto = new ExamDto();
+            }
+
+        }
+        return examDtos;
+    }
+
+    /**
+     *
+     * @return　获取考试列表返回的html
+     */
+    private String getExamListHtml() {
+        String examListUrl = "http://"+this.schoolCode+".njcedu.com/student/prese/examin/list.htm";
+        String cookie = getCookie();
+        HashMap<String,String> headerParam = new HashMap<String, String>();
+        headerParam.put("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:64.0) Gecko/20100101 Firefox/64.0");
+        String examListHtml = HttpClientUtil.getResByUrlAndCookie(examListUrl , headerParam , cookie , false);
+        return examListHtml;
     }
 
     private void preTest() {
@@ -74,7 +361,7 @@ public class APIController {
                     //DISC人格测验
                     String testIdPage = doTestId(test.getId()+"");
                     List<QuestionOption> questionOptions = getQuestionIds(testIdPage , true);
-                    做第七题(lschoolId, lUserId, this.nickName.trim(), test.getId() +"", questionOptions);
+                    do7(lschoolId, lUserId, this.nickName.trim(), test.getId() +"", questionOptions);
                     continue;
                 }
                 String testIdPage = doTestId(test.getId()+"");
@@ -87,7 +374,7 @@ public class APIController {
         }
     }
 
-    private void 做第七题(String lschoolId, String lUserId, String nickName, String s, List<QuestionOption> options) {
+    private void do7(String lschoolId, String lUserId, String nickName, String s, List<QuestionOption> options) {
         String testId = "7";
         if(options == null || options.size()==0){
             System.out.println("获取该测评id选项失败:"+ testId  + "\n请联系管理员排除bug");
@@ -302,14 +589,14 @@ public class APIController {
     private void doWatch01() throws IOException, InterruptedException, ParserException {
         //需要登录
         System.out.println(this.username + "  开始看视频：");
-        getSchoolLoginUrlAndCookie();
+
         List<TeachPlan> plans = getTeachPlans(getCookie());
         String blankStyle = "      ";
         if(plans != null && plans.size() >0){
             for(TeachPlan plan : plans){
                 System.out.println(blankStyle + plan.getTaskName());
                 if(plan.getStatus().equals("进行中")){
-                    ExercisesAndTests exercisesAndTests = this.getExercises("http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
+                    ExercisesAndTests exercisesAndTests = getExercises("http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
                             + plan.getShowPlanNumber(),  this.getCookie() );
                     //过滤出已完成的
                     float hasCompleteExercise = 1.0f;
@@ -403,7 +690,7 @@ public class APIController {
             for(TeachPlan plan : plans){
                 System.out.println( blankStyle + plan.getTaskName());
                 if(plan.getStatus().equals("进行中")){
-                    ExercisesAndTests exercisesAndTests = this.getExercises("http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
+                    ExercisesAndTests exercisesAndTests = getExercises("http://"+schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
                             + plan.getShowPlanNumber(),  this.getCookie() );
 
                     if(exercisesAndTests.getTests() != null && exercisesAndTests.getTests().size()>0){
@@ -421,6 +708,91 @@ public class APIController {
                         System.out.println(blankStyle + blankStyle + exercise.getName() );
                         System.out.println( blankStyle + blankStyle + hasCompleteExercise / exercisesAndTests.getExercises().size() * 100 +"%");
                     }
+                    //做考试
+                    exercisesAndTests.getExamIds().parallelStream()
+                            .filter(string-> string.contains("="))
+                            .map(string-> string.split("=")[string.split("=").length - 1 ])
+                            .forEach(examId->{
+                                String checkResp = checkCourseRate(examId);
+                                System.out.println("检查试卷是否可以考试返回:"+checkResp);
+
+                                String secondCheckResp = checkCourseRate(examId);
+                                System.out.println("检查试卷是否可以考试返回:"+secondCheckResp);
+
+                                String examHtml = getExamHtml(examId);
+
+                                //载入题库2 key -> id value -> answer
+                                Map<String,String> tiku2 = new HashMap<>();
+                                URL url = ClassLoader.getSystemResource("zgtda");
+                                File file = new File(url.getFile());
+                                if(file.exists() && file.isDirectory()){
+                                    Arrays.stream(file.list((File tempFile, String name) -> {
+                                        return Pattern.compile("[a-z]{2}\\.txt").matcher(name).find();
+                                    })).map((String str)->{
+                                        return  new File(file.getAbsolutePath() +"/"+str);
+                                    })
+                                            .forEach((File f)-> {
+                                                        try {
+                                                            //可以使用files方法files.lines()
+                                                            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f) ,Charset.forName("GBK") ));
+                                                            String content = br.lines().collect(Collectors.joining(","));
+                                                            for(String str : content.split(",")){
+                                                                tiku2.put(str.split("=")[0],str.split("=")[1]);
+                                                            }
+                                                        } catch (FileNotFoundException e) {
+                                                            e.printStackTrace();
+                                                        }
+                                                    }
+                                            );
+                                }
+
+                                //选择题解析
+                                HashMap<String,String> xuanZeMap = getXuanZeTiMap(examHtml);
+                                if(!checkResp.equals("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"-1\"/><STRF N=\"strText\" V=\"0\"/><STRF N=\"strInfo\" V=\"\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>")){
+                                    //可以考试
+                                    String questionAnswer = "";
+                                    String questionId = "";
+                                    for(Map<String,String> map : answersCache){
+                                        answersCacheIdAnswerMap.put(map.get("id") , map.get("answer"));
+                                    }
+
+                                    for(Map.Entry<String,String> entry : xuanZeMap.entrySet()){
+                                        if(answersCacheIdAnswerMap.containsKey(entry.getValue())){
+                                            //有答案
+                                            questionId = entry.getValue();
+                                            questionAnswer = answersCacheIdAnswerMap.get(entry.getValue());
+                                        }else{
+                                            //无答案
+                                            questionId = entry.getValue();
+                                            questionAnswer = tiku2.get(entry.getValue());
+                                        }
+
+                                        //提交选择题
+                                        String postXuanZeUrl = "http://"+schoolCode+".njcedu.com/student/prese/examin/handleTrans.cdo?strServiceName=StudentExminService&strTransName=doAnswer";
+                                        HashMap<String,String> postMap = new HashMap<>();
+                                        String postValue = "<CDO>\n" +
+                                                "    <STRF N=\"$strDestNodeName$\" V=\"TeachingBusiness\"/>\n" +
+                                                "    <STRF N=\"strServiceName\" V=\"StudentExminService\"/>\n" +
+                                                "    <STRF N=\"strTransName\" V=\"doAnswer\"/>\n" +
+                                                "    <LF N=\"lSchoolId\" V=\""+lschoolId+"\"/>\n" +
+                                                "    <LF N=\"lUserId\" V=\""+lUserId+"\"/>\n" +
+                                                "    <LF N=\"lExaminId\" V=\""+examId+"\"/>\n" +
+                                                "    <LF N=\"lPlanId\" V=\""+plan.getShowPlanNumber()+"\"/>\n" +
+                                                "    <LF N=\"nExaminType\" V=\"0\"/>\n" +
+                                                "    <LF N=\"lQuestionId\" V=\""+questionId+"\"/>\n" +
+                                                "    <STRF N=\"strQuestionAnswer\" V=\""+questionAnswer+"\"/>\n" +
+                                                "</CDO>";
+                                        postMap.put("$$CDORequest$$" ,postValue );
+                                        String submitXuanZeTi = HttpClientUtil.postResByUrlAndCookie(postXuanZeUrl ,  getCookie() , postMap ,false);
+                                        System.out.println("submitXuanZeTi"+submitXuanZeTi);
+                                    }
+                                    //主观题解析
+                                    HashMap<String,String> zhuGuanMap = getZhuGuanQueMap(examHtml);
+                                    //主观题
+                                    postZhuGaunQue(examId ,plan.getShowPlanNumber() ,  zhuGuanMap);
+                                }
+
+                            });
                 }else{
                     System.out.println("做试题 "+plan.getTaskName() + " 已完成 ，自动跳过。");
                 }
@@ -605,6 +977,17 @@ public class APIController {
         exercisesAndTests.setTests(planTests);
 
 
+
+        Document doc = Jsoup.parse(respStr);
+        Element ele = doc.select("#ExamTable").first();
+        Elements tdEles = ele.select("a");
+        List<String> ids = tdEles.parallelStream()
+                .map(tempEle ->{
+                    return tempEle.attr("href");
+                })
+                .collect(Collectors.toList());
+
+        exercisesAndTests.setExamIds(ids);
         return exercisesAndTests;
     }
 
@@ -734,34 +1117,6 @@ public class APIController {
         return filter;
     }
 
-    /**
-     * 获取学习任务
-     *
-     * @param planId 9670000047
-     * @return
-     * @throws IOException
-     */
-    public int getListens(String planId, String cookie) throws IOException {
-        try {
-            String url = "http://zync.njcedu.com/student/prese/teachplan/listdetail.htm?id=" + planId;
-            String respStr = HttpClientUtil.getResByUrlAndCookie(url, null ,  cookie, false);
-            //class jl_table
-            Parser parser = Parser.createParser(respStr, Charset.defaultCharset().toString());
-            NodeFilter examTableFilter = createExamTableFilter();
-            NodeList listenList = parser.parse(examTableFilter);
-            int count = 0;
-            Node baseNode = listenList.toNodeArray()[0];
-            String taskName = baseNode.getChildren().toNodeArray()[3].getChildren().toNodeArray()[1].getChildren().toNodeArray()[0].getText();
-            for (Node node : listenList.toNodeArray()) {
-
-
-            }
-            System.out.println(respStr);
-        } catch (ParserException e) {
-            e.printStackTrace();
-        }
-        return 0;
-    }
 
     private NodeFilter createExamTableFilter() {
         return new NodeFilter() {

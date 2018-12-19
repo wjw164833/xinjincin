@@ -11,7 +11,14 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ExercisesAndTests {
+    //课程
     private List<Exercise> exercises;
 
+    //测评
     private List<Test> tests;
+
+    //考试
+    private List<String> examIds;
+
+
 }

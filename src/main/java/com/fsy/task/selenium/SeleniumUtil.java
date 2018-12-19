@@ -22,6 +22,9 @@ public class SeleniumUtil {
         return;
     }
     public User getUser(String username , String password){
+        System.setProperty("webdriver.gecko.driver","/Users/fushiyong/Downloads/geckodriver");
+
+
         // TODO Auto-generated method stub
         //如果测试的浏览器没有安装在默认目录，那么必须在程序中设置
         //bug1:System.setProperty("webdriver.chrome.driver", "C://Program Files (x86)//Google//Chrome//Application//chrome.exe");

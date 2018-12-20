@@ -138,10 +138,10 @@ public class APIController {
 
         //登录获取cookie
         getSchoolLoginUrlAndCookie();
-//        doWatch01();
+        doWatch01();
 
         //测评准备工作
-//        preTest();
+        preTest();
 
 
     }

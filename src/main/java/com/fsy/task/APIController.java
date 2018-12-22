@@ -64,6 +64,7 @@ public class APIController {
 
     private static final String homeDir = System.getProperty("user.dir");
     static {
+
         try {
             //导入主观题答案
             File file = new File(homeDir+File.separator + "zgtda");

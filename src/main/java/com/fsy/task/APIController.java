@@ -84,7 +84,7 @@ public class APIController {
                                 Matcher m = Pattern.compile("(\\d{4}).txt").matcher(f.getName());
                                 m.find();
                                 zhuGaunAnswerCache.put(m.group(1),content);
-                                System.out.println(zhuGaunAnswerCache.get(m.group(1)));
+                                System.out.println(m.group(1)+zhuGaunAnswerCache.get(m.group(1)));
                             } catch (FileNotFoundException e) {
                                 e.printStackTrace();
                             }
@@ -212,17 +212,21 @@ public class APIController {
 
         HashMap<String,String> postParam = new HashMap<>();
         List<QuestionAnswerDto> zhuGuanAnswer = new ArrayList<>();
-
+        for( int i = 0 ; i < examMap.size() ; i++){
+            zhuGuanAnswer.add(null);
+        }
+        int index = -1;
         for(Map.Entry<String,String> entry : examMap.entrySet()){
+            index++;
             if(zhuGaunAnswerCache.containsKey(entry.getValue())){
-                zhuGuanAnswer.add(QuestionAnswerDto.builder()
-                                    .answer(zhuGaunAnswerCache.get(entry.getValue()))
-                                    .questionid(entry.getValue())
-                                    .build()
-                );
+                zhuGuanAnswer.set(Integer.valueOf(entry.getKey())    , QuestionAnswerDto.builder()
+                        .answer(zhuGaunAnswerCache.get(entry.getValue()))
+                        .questionid(entry.getValue())
+                        .build());
             }
         }
         String postJson = JSON.toJSONString(zhuGuanAnswer);
+        postJson = postJson.replaceAll("\"","&quot;");
         String postValue = "<CDO>\n" +
                 "    <STRF N=\"$strDestNodeName$\" V=\"TeachingBusiness\"/>\n" +
                 "    <STRF N=\"strServiceName\" V=\"StudentExminService\"/>\n" +
@@ -237,6 +241,7 @@ public class APIController {
                 "    <STRF N=\"strToken\" V=\"\"/>\n" +
                 "</CDO>";
         postParam.put("$$CDORequest$$" , postValue);
+        System.out.println(postValue);
         String resp = HttpClientUtil.postResByUrlAndCookie(postUrl , getCookie() , postParam , false);
         System.out.println(resp);
         if(isSuccess(resp)){
@@ -254,10 +259,11 @@ public class APIController {
         //li class=\"ks_tm mb10\
         HashMap<String,String> result = new HashMap<>();
         Document document = Jsoup.parse(examHtml);
-        Elements elements = document.select("li[class=ks_tm mb10]");
+        List<Element> elements = document.select("li[class=ks_tm mb10]").parallelStream().filter(Element::hasText).collect(Collectors.toList());
         for(int i=0;i<elements.size();i++){
             Element ele = elements.get(i);
-            result.put(ele.text() , ele.attr("id"));
+
+            result.put(i+"" ,ele.attr("id") );
 
         }
         return result;
@@ -716,8 +722,8 @@ public class APIController {
                                 String checkResp = checkCourseRate(examId);
                                 System.out.println("检查试卷是否可以考试返回:"+checkResp);
 
-                                String secondCheckResp = checkCourseRate(examId);
-                                System.out.println("检查试卷是否可以考试返回:"+secondCheckResp);
+//                                String secondCheckResp = checkCourseRate(examId);
+//                                System.out.println("检查试卷是否可以考试返回:"+secondCheckResp);
 
                                 String examHtml = getExamHtml(examId);
 
@@ -784,7 +790,6 @@ public class APIController {
                                                 "</CDO>";
                                         postMap.put("$$CDORequest$$" ,postValue );
                                         String submitXuanZeTi = HttpClientUtil.postResByUrlAndCookie(postXuanZeUrl ,  getCookie() , postMap ,false);
-                                        System.out.println("submitXuanZeTi"+submitXuanZeTi);
                                     }
                                     //主观题解析
                                     HashMap<String,String> zhuGuanMap = getZhuGuanQueMap(examHtml);

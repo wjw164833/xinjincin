@@ -7,8 +7,6 @@ import com.fsy.task.selenium.SeleniumUtil;
 import com.fsy.task.util.CollectionsUtil;
 import com.fsy.task.util.HttpClientUtil;
 import com.fsy.task.util.MD5Util;
-import com.fsy.task.util.StringUtils;
-import com.google.common.io.Files;
 import org.apache.http.client.CookieStore;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.BasicCookieStore;
@@ -20,11 +18,9 @@ import org.htmlparser.tags.*;
 import org.htmlparser.util.NodeList;
 import org.htmlparser.util.ParserException;
 import org.jsoup.Jsoup;
-import org.jsoup.helper.StringUtil;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-
 import java.io.*;
 import java.net.URL;
 import java.nio.charset.Charset;
@@ -65,16 +61,19 @@ public class APIController {
 
     private static HashMap<String,String> zhuGaunAnswerCache = new HashMap<>();
     private static HashMap<String,String> answersCacheIdAnswerMap = new HashMap<>();
+
+    private static final String homeDir = System.getProperty("user.dir");
     static {
         try {
             //导入主观题答案
-            URL url = ClassLoader.getSystemResource("zgtda");
-            File file = new File(url.getFile());
+            File file = new File(homeDir+File.separator + "zgtda");
             if(file.exists() && file.isDirectory()) {
                 Arrays.stream(file.list((File tempFile, String name) -> {
                     return Pattern.compile("(\\d{4})\\.txt").matcher(name).find();
                 })).map((String str)->{
-                    return  new File(file.getAbsolutePath() +"/"+str);
+                    File tempfiLE = new File(homeDir+File.separator + "zgtda" + File.separator+str);
+                    System.out.println("map:"+tempfiLE.getAbsolutePath());
+                    return  tempfiLE;
                 })
             .forEach((File f)-> {
                             try {
@@ -729,13 +728,12 @@ public class APIController {
 
                                 //载入题库2 key -> id value -> answer
                                 Map<String,String> tiku2 = new HashMap<>();
-                                URL url = ClassLoader.getSystemResource("zgtda");
-                                File file = new File(url.getFile());
+                                File file = new File(homeDir+File.separator + "zgtda");
                                 if(file.exists() && file.isDirectory()){
                                     Arrays.stream(file.list((File tempFile, String name) -> {
                                         return Pattern.compile("[a-z]{2}\\.txt").matcher(name).find();
                                     })).map((String str)->{
-                                        return  new File(file.getAbsolutePath() +"/"+str);
+                                        return  new File(homeDir+File.separator + "zgtda"+File.separator+str);
                                     })
                                             .forEach((File f)-> {
                                                         try {

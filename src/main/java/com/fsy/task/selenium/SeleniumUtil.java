@@ -23,8 +23,8 @@ public class SeleniumUtil {
         return;
     }
     public User getUser(String username , String password){
-//        System.setProperty("webdriver.gecko.driver","C:\\Program Files (x86)\\MTS\\geckodriver.exe");
-        System.setProperty("webdriver.gecko.driver","/Users/fushiyong/Downloads/geckodriver");
+        System.setProperty("webdriver.gecko.driver","C:\\Program Files (x86)\\MTS\\geckodriver.exe");
+//        System.setProperty("webdriver.gecko.driver","/Users/fushiyong/Downloads/geckodriver");
 
 
         // TODO Auto-generated method stub

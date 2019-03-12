@@ -23,7 +23,10 @@ public class APIControllerTests {
 //        APIController apiController = new APIController(token , "gyu-160308401009" , "123456");
         //gyu-160308401009  123456 看视频
 
-        APIController apiController = new APIController("tecsuda-1816473049" , "123456");
+//        APIController apiController = new APIController("tecsuda-1816473049" , "123456");
+
+        //gyu-161215401008 123456
+        APIController apiController = new APIController("gyu-161215401008" , "123456");
 
     }
 }

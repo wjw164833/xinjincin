@@ -23,7 +23,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import java.io.*;
-import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -64,6 +63,10 @@ public class APIController {
     private static HashMap<String,String> answersCacheIdAnswerMap = new HashMap<>();
 
     private static final String homeDir = System.getProperty("user.dir");
+
+    List<TeachPlan> plans = new ArrayList<>();
+
+    ExercisesAndTests exercisesAndTests = new ExercisesAndTests();
     static {
 
         try {
@@ -532,14 +535,12 @@ public class APIController {
         }
         //startevaluation.htm TODO 完成的去重复
         NodeFilter questionIdFilter = new NodeFilter() {
+            @Override
             public boolean accept(Node node) {
-                if (node instanceof BulletList
+                return node instanceof BulletList
                         && ((BulletList) node).getAttribute("class") != null
                         && ((BulletList) node).getAttribute("class").contains("nswer")
-                        && ((BulletList) node).getAttribute("questionId") != null
-                        )
-                    return true;
-                else return false;
+                        && ((BulletList) node).getAttribute("questionId") != null;
             }
         };
 
@@ -552,14 +553,12 @@ public class APIController {
             thatMatch = cacheNodeList.extractAllNodesThatMatch(questionIdFilter);
         }else{
             NodeFilter questionId2Filter = new NodeFilter() {
+                @Override
                 public boolean accept(Node node) {
-                    if (node instanceof BulletList
+                    return node instanceof BulletList
                             && ((BulletList) node).getAttribute("class") != null
                             && ((BulletList) node).getAttribute("class").contains("faceSubject")
-                            && ((BulletList) node).getAttribute("questionid") != null
-                            )
-                        return true;
-                    else return false;
+                            && ((BulletList) node).getAttribute("questionid") != null;
                 }
             };
             thatMatch = cacheNodeList.extractAllNodesThatMatch(questionId2Filter);
@@ -598,16 +597,15 @@ public class APIController {
         }
     }
 
-    private void doWatch01() throws IOException, InterruptedException, ParserException {
+    private void doWatch01() throws IOException, ParserException {
         //需要登录
         System.out.println(this.username + "  开始看视频：");
 
-        List<TeachPlan> plans = getTeachPlans(getCookie());
         String blankStyle = "      ";
             for(TeachPlan plan : plans){
                 System.out.println(blankStyle + plan.getTaskName());
                 if(plan.getStatus().equals("进行中")){
-                    ExercisesAndTests exercisesAndTests = getExercises("http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
+                    getExercises("http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
                             + plan.getShowPlanNumber(),  this.getCookie() );
                     //过滤出已完成的
 //                    float hasCompleteExercise = 1.0f;
@@ -739,14 +737,13 @@ public class APIController {
         //需要登录
         String blankStyle = "      ";
         System.out.println(this.username + "  开始做试题：");
-        getSchoolLoginUrlAndCookie() ;
-        List<TeachPlan> plans = getTeachPlans(getCookie());
+        getSchoolLoginUrlAndCookie();
         if(plans != null && plans.size() >0){
 
             for(TeachPlan plan : plans){
                 System.out.println( blankStyle + plan.getTaskName());
                 if(plan.getStatus().equals("进行中")){
-                    ExercisesAndTests exercisesAndTests = getExercises("http://"+schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
+                    getExercises("http://"+schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
                             + plan.getShowPlanNumber(),  this.getCookie() );
 
                     if(exercisesAndTests.getTests() != null && exercisesAndTests.getTests().size()>0){
@@ -765,88 +762,89 @@ public class APIController {
                         System.out.println( blankStyle + blankStyle + hasCompleteExercise / exercisesAndTests.getExercises().size() * 100 +"%");
                     }
                     //做考试
-                    exercisesAndTests.getExamIds().parallelStream()
-                            .filter(string-> string.contains("="))
-                            .map(string-> string.split("=")[string.split("=").length - 1 ])
-                            .forEach(examId->{
-                                String checkResp = checkCourseRate(examId);
-                                System.out.println("检查试卷是否可以考试返回:"+checkResp);
+                    if(CollectionsUtil.isNoyEmpty(exercisesAndTests.getExamIds())){
+                        exercisesAndTests.getExamIds().parallelStream()
+                                .filter(string-> string.contains("="))
+                                .map(string-> string.split("=")[string.split("=").length - 1 ])
+                                .forEach(examId->{
+                                    String checkResp = checkCourseRate(examId);
+                                    System.out.println("检查试卷是否可以考试返回:"+checkResp);
 
 //                                String secondCheckResp = checkCourseRate(examId);
 //                                System.out.println("检查试卷是否可以考试返回:"+secondCheckResp);
 
-                                String examHtml = getExamHtml(examId);
+                                    String examHtml = getExamHtml(examId);
 
-                                //载入题库2 key -> id value -> answer
-                                Map<String,String> tiku2 = new HashMap<>();
-                                File file = new File(homeDir+File.separator + "zgtda");
-                                if(file.exists() && file.isDirectory()){
-                                    Arrays.stream(file.list((File tempFile, String name) -> {
-                                        return Pattern.compile("[a-z]{2}\\.txt").matcher(name).find();
-                                    })).map((String str)->{
-                                        return  new File(homeDir+File.separator + "zgtda"+File.separator+str);
-                                    })
-                                            .forEach((File f)-> {
-                                                        try {
-                                                            //可以使用files方法files.lines()
-                                                            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f) ,Charset.forName("GBK") ));
-                                                            String content = br.lines().collect(Collectors.joining(","));
-                                                            for(String str : content.split(",")){
-                                                                tiku2.put(str.split("=")[0],str.split("=")[1]);
+                                    //载入题库2 key -> id value -> answer
+                                    Map<String,String> tiku2 = new HashMap<>();
+                                    File file = new File(homeDir+File.separator + "zgtda");
+                                    if(file.exists() && file.isDirectory()){
+                                        Arrays.stream(file.list((File tempFile, String name) -> {
+                                            return Pattern.compile("[a-z]{2}\\.txt").matcher(name).find();
+                                        })).map((String str)->{
+                                            return  new File(homeDir+File.separator + "zgtda"+File.separator+str);
+                                        })
+                                                .forEach((File f)-> {
+                                                            try {
+                                                                //可以使用files方法files.lines()
+                                                                BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f) ,Charset.forName("GBK") ));
+                                                                String content = br.lines().collect(Collectors.joining(","));
+                                                                for(String str : content.split(",")){
+                                                                    tiku2.put(str.split("=")[0],str.split("=")[1]);
+                                                                }
+                                                            } catch (FileNotFoundException e) {
+                                                                e.printStackTrace();
                                                             }
-                                                        } catch (FileNotFoundException e) {
-                                                            e.printStackTrace();
                                                         }
-                                                    }
-                                            );
-                                }
-
-                                //选择题解析
-                                HashMap<String,String> xuanZeMap = getXuanZeTiMap(examHtml);
-                                if(!checkResp.equals("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"-1\"/><STRF N=\"strText\" V=\"0\"/><STRF N=\"strInfo\" V=\"\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>")){
-                                    //可以考试
-                                    String questionAnswer = "";
-                                    String questionId = "";
-                                    for(Map<String,String> map : answersCache){
-                                        answersCacheIdAnswerMap.put(map.get("id") , map.get("answer"));
+                                                );
                                     }
 
-                                    for(Map.Entry<String,String> entry : xuanZeMap.entrySet()){
-                                        if(answersCacheIdAnswerMap.containsKey(entry.getValue())){
-                                            //有答案
-                                            questionId = entry.getValue();
-                                            questionAnswer = answersCacheIdAnswerMap.get(entry.getValue());
-                                        }else{
-                                            //无答案
-                                            questionId = entry.getValue();
-                                            questionAnswer = tiku2.get(entry.getValue());
+                                    //选择题解析
+                                    HashMap<String,String> xuanZeMap = getXuanZeTiMap(examHtml);
+                                    if(!checkResp.equals("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"-1\"/><STRF N=\"strText\" V=\"0\"/><STRF N=\"strInfo\" V=\"\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>")){
+                                        //可以考试
+                                        String questionAnswer = "";
+                                        String questionId = "";
+                                        for(Map<String,String> map : answersCache){
+                                            answersCacheIdAnswerMap.put(map.get("id") , map.get("answer"));
                                         }
 
-                                        //提交选择题
-                                        String postXuanZeUrl = "http://"+schoolCode+".njcedu.com/student/prese/examin/handleTrans.cdo?strServiceName=StudentExminService&strTransName=doAnswer";
-                                        HashMap<String,String> postMap = new HashMap<>();
-                                        String postValue = "<CDO>\n" +
-                                                "    <STRF N=\"$strDestNodeName$\" V=\"TeachingBusiness\"/>\n" +
-                                                "    <STRF N=\"strServiceName\" V=\"StudentExminService\"/>\n" +
-                                                "    <STRF N=\"strTransName\" V=\"doAnswer\"/>\n" +
-                                                "    <LF N=\"lSchoolId\" V=\""+lschoolId+"\"/>\n" +
-                                                "    <LF N=\"lUserId\" V=\""+lUserId+"\"/>\n" +
-                                                "    <LF N=\"lExaminId\" V=\""+examId+"\"/>\n" +
-                                                "    <LF N=\"lPlanId\" V=\""+plan.getShowPlanNumber()+"\"/>\n" +
-                                                "    <LF N=\"nExaminType\" V=\"0\"/>\n" +
-                                                "    <LF N=\"lQuestionId\" V=\""+questionId+"\"/>\n" +
-                                                "    <STRF N=\"strQuestionAnswer\" V=\""+questionAnswer+"\"/>\n" +
-                                                "</CDO>";
-                                        postMap.put("$$CDORequest$$" ,postValue );
-                                        String submitXuanZeTi = HttpClientUtil.postResByUrlAndCookie(postXuanZeUrl ,  getCookie() , postMap ,false);
-                                    }
-                                    //主观题解析
-                                    HashMap<String,String> zhuGuanMap = getZhuGuanQueMap(examHtml);
-                                    //主观题
-                                    postZhuGaunQue(examId ,plan.getShowPlanNumber() ,  zhuGuanMap);
-                                }
+                                        for(Map.Entry<String,String> entry : xuanZeMap.entrySet()){
+                                            if(answersCacheIdAnswerMap.containsKey(entry.getValue())){
+                                                //有答案
+                                                questionId = entry.getValue();
+                                                questionAnswer = answersCacheIdAnswerMap.get(entry.getValue());
+                                            }else{
+                                                //无答案
+                                                questionId = entry.getValue();
+                                                questionAnswer = tiku2.get(entry.getValue());
+                                            }
 
-                            });
+                                            //提交选择题
+                                            String postXuanZeUrl = "http://"+schoolCode+".njcedu.com/student/prese/examin/handleTrans.cdo?strServiceName=StudentExminService&strTransName=doAnswer";
+                                            HashMap<String,String> postMap = new HashMap<>();
+                                            String postValue = "<CDO>\n" +
+                                                    "    <STRF N=\"$strDestNodeName$\" V=\"TeachingBusiness\"/>\n" +
+                                                    "    <STRF N=\"strServiceName\" V=\"StudentExminService\"/>\n" +
+                                                    "    <STRF N=\"strTransName\" V=\"doAnswer\"/>\n" +
+                                                    "    <LF N=\"lSchoolId\" V=\""+lschoolId+"\"/>\n" +
+                                                    "    <LF N=\"lUserId\" V=\""+lUserId+"\"/>\n" +
+                                                    "    <LF N=\"lExaminId\" V=\""+examId+"\"/>\n" +
+                                                    "    <LF N=\"lPlanId\" V=\""+plan.getShowPlanNumber()+"\"/>\n" +
+                                                    "    <LF N=\"nExaminType\" V=\"0\"/>\n" +
+                                                    "    <LF N=\"lQuestionId\" V=\""+questionId+"\"/>\n" +
+                                                    "    <STRF N=\"strQuestionAnswer\" V=\""+questionAnswer+"\"/>\n" +
+                                                    "</CDO>";
+                                            postMap.put("$$CDORequest$$" ,postValue );
+                                            String submitXuanZeTi = HttpClientUtil.postResByUrlAndCookie(postXuanZeUrl ,  getCookie() , postMap ,false);
+                                        }
+                                        //主观题解析
+                                        HashMap<String,String> zhuGuanMap = getZhuGuanQueMap(examHtml);
+                                        //主观题
+                                        postZhuGaunQue(examId ,plan.getShowPlanNumber() ,  zhuGuanMap);
+                                    }
+                                });
+                    }
                 }else{
                     System.out.println("做试题 "+plan.getTaskName() + " 已完成 ，自动跳过。");
                 }
@@ -909,12 +907,13 @@ public class APIController {
         }
     }
 
-    public List<TeachPlan> getTeachPlans(String cookie) throws IOException, ParserException {
+    public void getTeachPlans(String cookie) throws IOException, ParserException {
         String teachPlanUrl = "http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/index.htm";
         String respStr = HttpClientUtil.getResByUrlAndCookie(teachPlanUrl,  null , cookie, false);
         Parser parser = Parser.createParser(respStr, Charset.defaultCharset().toString());
         //缓冲层 parser解析一次之后，再次解析为空
         NodeList cacheNodeList = parser.parse(new NodeFilter() {
+            @Override
             public boolean accept(Node node) {
                 return true;
             }
@@ -925,8 +924,6 @@ public class APIController {
 
         NodeList thatMatch = cacheNodeList.extractAllNodesThatMatch(teachPlanFilter, false);
 
-
-        List<TeachPlan> plans = new ArrayList<TeachPlan>();
         for (Node match : thatMatch.toNodeArray()) {
             if (match instanceof BulletList) {
                 TeachPlan plan = TeachPlan.builder().build();
@@ -948,8 +945,9 @@ public class APIController {
                                     tempCount++;
                                 } else if (spanOrLink instanceof LinkTag) {
                                     //status
-                                    if (tempCountI == 0)
+                                    if(tempCountI == 0) {
                                         plan.setStatus(((LinkTag) spanOrLink).getLinkText());
+                                    }
                                     tempCountI++;
                                 }
                             }
@@ -978,7 +976,7 @@ public class APIController {
                                     }
                                 }
                             }
-                        } else ;
+                        }
 
                     }
 
@@ -986,8 +984,6 @@ public class APIController {
                 plans.add(plan);
             }
         }
-
-        return plans;
     }
 
     private NodeFilter createTeachPlanFilter() {
@@ -1005,8 +1001,8 @@ public class APIController {
     /**
      * @return
      */
-    public ExercisesAndTests getExercises(String url, String cookie) throws IOException, ParserException {
-        ExercisesAndTests exercisesAndTests = new ExercisesAndTests();
+    public void getExercises(String url, String cookie) throws ParserException {
+
 
         String respStr = HttpClientUtil.getResByUrlAndCookie(url, null ,  cookie, false);
 
@@ -1034,15 +1030,18 @@ public class APIController {
 
         Document doc = Jsoup.parse(respStr);
         Element ele = doc.select("#careerTable").first();
-        Elements tdEles = ele.select("a");
-        List<String> ids = tdEles.parallelStream()
-                .map(tempEle ->{
-                    return tempEle.attr("href");
-                })
-                .collect(Collectors.toList());
 
-        exercisesAndTests.setExamIds(ids);
-        return exercisesAndTests;
+        if(ele != null){
+            Elements tdEles = ele.select("a");
+            List<String> ids = tdEles.parallelStream()
+                    .map(tempEle ->{
+                        return tempEle.attr("href");
+                    })
+                    .collect(Collectors.toList());
+
+            exercisesAndTests.setExamIds(ids);
+        }
+
     }
 
     private List<Test> getPlanTest(String respStr) {
@@ -1058,8 +1057,9 @@ public class APIController {
                         && ((LinkTag) node).getAttribute("onclick") != null
                         &&  ((LinkTag) node).getAttribute("onclick").contains(idFilterStr)){
                     return true;
-                }else
-                return false;
+                }else {
+                    return false;
+                }
             }
         };
 
@@ -1158,14 +1158,16 @@ public class APIController {
     private NodeFilter createTableIdFilter(final String id) {
 
         NodeFilter filter = new NodeFilter() {
+            @Override
             public boolean accept(Node node) {
                 if (node != null
                         && node instanceof TableTag
                         && ((TableTag) node).getAttribute("id") != null
                         && ((TableTag) node).getAttribute("id").equals(id)) {
                     return true;
-                } else
+                } else {
                     return false;
+                }
             }
         };
         return filter;
@@ -1322,24 +1324,22 @@ public class APIController {
 
     private NodeFilter createTableFilter(final int index) {
         return new NodeFilter() {
+            @Override
             public boolean accept(Node node) {
-                if (node instanceof TableTag
+                return node instanceof TableTag
                         && ((TableTag) node).getAttribute("id") != null
-                        && ((TableTag) node).getAttribute("id").equals("table" + index))
-                    return true;
-                else return false;
+                        && ((TableTag) node).getAttribute("id").equals("table" + index);
             }
         };
     }
 
     private NodeFilter createUserIdFilter() {
         return new NodeFilter() {
+            @Override
             public boolean accept(Node node) {
-                if (node instanceof InputTag
+                return node instanceof InputTag
                         && ((InputTag) node).getAttribute("id") != null
-                        && ((InputTag) node).getAttribute("id").equals("lUserId"))
-                    return true;
-                else return false;
+                        && ((InputTag) node).getAttribute("id").equals("lUserId");
             }
         };
     }
@@ -1459,9 +1459,6 @@ public class APIController {
 }
 
 class CookieConstant {
-    public static String COOKIE_USERID = "luserid";
-    public static String COOKIE_TOKEN = "token";
-    public static String COOKIE = "Cookie";
     public static String SCHOOL_TOKEN = "schoolToken";
 
 }

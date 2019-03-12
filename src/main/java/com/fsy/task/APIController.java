@@ -7,6 +7,7 @@ import com.fsy.task.selenium.SeleniumUtil;
 import com.fsy.task.util.CollectionsUtil;
 import com.fsy.task.util.HttpClientUtil;
 import com.fsy.task.util.MD5Util;
+import com.fsy.task.util.StringUtils;
 import org.apache.http.client.CookieStore;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.BasicCookieStore;
@@ -115,7 +116,7 @@ public class APIController {
 //                .schoolToken(schoolToken)
 //                .nickName(nickName)
 //                .build();
-        //modified for 去selenium代之以cookiestore by fushiyong at 2018-12-18  17:30 end
+//        modified for 去selenium代之以cookiestore by fushiyong at 2018-12-18  17:30 end
 
 
         this.nickName = user.getNickName();
@@ -366,9 +367,14 @@ public class APIController {
                 if(test.getId() == 7){
                     //DISC人格测验
                     String testIdPage = doTestId(test.getId()+"");
-                    List<QuestionOption> questionOptions = getQuestionIds(testIdPage , true);
-                    do7(lschoolId, lUserId, this.nickName.trim(), test.getId() +"", questionOptions);
-                    continue;
+                    if(StringUtils.isNotEmpty(testIdPage)){
+                       List<QuestionOption> questionOptions = getQuestionIds(testIdPage , true);                        
+                       do7(lschoolId, lUserId, this.nickName.trim(), test.getId() +"", questionOptions);                
+                       continue;                                                                                        
+                    }
+
+
+
                 }
                 String testIdPage = doTestId(test.getId()+"");
                 List<QuestionOption> questionOptions = getQuestionIds(testIdPage , false);
@@ -598,90 +604,134 @@ public class APIController {
 
         List<TeachPlan> plans = getTeachPlans(getCookie());
         String blankStyle = "      ";
-        if(plans != null && plans.size() >0){
             for(TeachPlan plan : plans){
                 System.out.println(blankStyle + plan.getTaskName());
                 if(plan.getStatus().equals("进行中")){
                     ExercisesAndTests exercisesAndTests = getExercises("http://"+this.schoolCode+".njcedu.com/student/prese/teachplan/listdetail.htm?id="
                             + plan.getShowPlanNumber(),  this.getCookie() );
                     //过滤出已完成的
-                    float hasCompleteExercise = 1.0f;
-                    long startTimeMills = System.currentTimeMillis();
-                    for(Exercise exercise : exercisesAndTests.getExercises()){
-                        if(exercise.getStatus().contains("未完成")){
-                            int leftNumberIndex = exercise.getStatus().indexOf("（");
-                            int indexStart = exercise.getStatus().indexOf("/ ");
-                            int hasCompleteCount = Integer.valueOf(exercise.getStatus().substring(leftNumberIndex + "（".length() ,indexStart -1 ));
-                            int indexEnd = exercise.getStatus().indexOf("）");
-                            String allNeedCount = exercise.getStatus().substring(indexStart + "/ ".length(), indexEnd  ).trim();
-                            int need2Complete = Integer.valueOf(allNeedCount) - hasCompleteCount;
-                            int needCount = -1;
-                            if(need2Complete % 2 == 0){
-                                needCount = need2Complete / 2 ;
-                            }else{
-                                needCount = need2Complete / 2 + 1 ;
-                            }
-                            for(int count = 0 ; count < needCount ; count++){
-                                this.watchVideo(exercise.getNumber());
-                                System.out.print(".");
-                                //解决看视频太慢的问题
-                                //        Thread.sleep(30000);
-                                //支持秒刷的业务逻辑
+//                    float hasCompleteExercise = 1.0f;
+//                    long startTimeMills = System.currentTimeMillis();
 
-                            }
-                        }else{
-                            System.out.println(exercise.getName() + " 已完成 ，自动跳过。" );
+                    List<Exercise> exercises = exercisesAndTests.getExercises();
+                    exercises = exercises.stream().filter(exercise -> exercise.getStatus().contains("未完成"))
+                            .collect(Collectors.toList());
+                    int splitCount = 100 ;
+                    if(exercises.size() < splitCount){
+                        doExercises(exercises);
+                    }else{
+
+                        int count = exercises.size() / splitCount;
+                        int yu = exercises.size() % splitCount;
+
+
+                        //切片
+
+                        for(int i=0;i<count;i++){
+                            List<Exercise> subList = exercises.subList( i * splitCount , splitCount * (i + 1 ));
+                            doExercises(subList);
                         }
 
-                    }
-
-                    long endTimeMills = System.currentTimeMillis();
-
-                    long periodTime = endTimeMills - startTimeMills;
-
-                    long periodTimeSecond = periodTime / 1000 ;
-
-                    if(periodTimeSecond < 60 ){
-                        Thread.sleep((60 - periodTimeSecond) * 1000);
-                    }
-
-                    //支持秒刷的业务
-                    for(Exercise exercise : exercisesAndTests.getExercises()){
-                        if(exercise.getStatus().contains("未完成")){
-                            // / )
-
-                            int leftNumberIndex = exercise.getStatus().indexOf("（");
-
-                            int indexStart = exercise.getStatus().indexOf("/ ");
-                            int hasCompleteCount = Integer.valueOf(exercise.getStatus().substring(leftNumberIndex + "（".length() ,indexStart -1 ));
-
-                            int indexEnd = exercise.getStatus().indexOf("）");
-                            String allNeedCount = exercise.getStatus().substring(indexStart + "/ ".length(), indexEnd  ).trim();
-                            int need2Complete = Integer.valueOf(allNeedCount) - hasCompleteCount;
-                            int needCount = -1;
-                            if(need2Complete % 2 == 0){
-                                needCount = need2Complete / 2 ;
-                            }else{
-                                needCount = need2Complete / 2 + 1 ;
-                            }
-                            for(int count = 0 ; count < needCount ; count++){
-                                //解决看视频太慢的问题 浪费了三十秒 很慢 要是多个答案 就非常慢了
-                                //        Thread.sleep(30000);
-                                //支持秒刷的业务逻辑
-                                String url = "http://course.njcedu.com/Servlet/recordStudy.svl?lCourseId=" + exercise.getNumber() +
-                                        "&lSchoolId=" + this.lschoolId + "&strStartTime=0";
-                                HttpClientUtil.getResByUrlAndCookie(url, null , getCookieByMap(cookieMap), false);
-                                System.out.print(".");
-                            }
+                        for(int x =0 ; x < yu ; x++){
+                            List<Exercise> subList = exercises.subList( count / splitCount , exercises.size());
+                            doExercises(subList);
                         }
-                        hasCompleteExercise++;
-                        System.out.println(blankStyle+ blankStyle + exercise.getName()  + hasCompleteExercise / exercisesAndTests.getExercises().size() * 100 +"%" );
+
+
                     }
+
+
+
+
 
                 }else{
                     System.out.println("看视频 "+ plan.getTaskName() + " 已完成 ，自动跳过。");
                 }
             }
+        }
+
+    private void doExercises(List<Exercise> exercises) {
+        String blankStyle = "      ";
+        float hasCompleteExercise = 1.0f;
+        long startTimeMills = System.currentTimeMillis();
+        for(Exercise exercise : exercises){
+            if(exercise.getStatus().contains("未完成")){
+                int leftNumberIndex = exercise.getStatus().indexOf("（");
+                int indexStart = exercise.getStatus().indexOf("/ ");
+                int hasCompleteCount = Integer.valueOf(exercise.getStatus().substring(leftNumberIndex + "（".length() ,indexStart -1 ));
+                int indexEnd = exercise.getStatus().indexOf("）");
+                String allNeedCount = exercise.getStatus().substring(indexStart + "/ ".length(), indexEnd  ).trim();
+                int need2Complete = Integer.valueOf(allNeedCount) - hasCompleteCount;
+                int needCount = -1;
+                if(need2Complete % 2 == 0){
+                    needCount = need2Complete / 2 ;
+                }else{
+                    needCount = need2Complete / 2 + 1 ;
+                }
+                for(int count = 0 ; count < needCount ; count++){
+                    try {
+                        this.watchVideo(exercise.getNumber());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    //解决看视频太慢的问题
+                    //        Thread.sleep(30000);
+                    //支持秒刷的业务逻辑
+
+                }
+            }else{
+                System.out.println(exercise.getName() + " 已完成 ，自动跳过。" );
+            }
+
+        }
+
+        long endTimeMills = System.currentTimeMillis();
+
+        long periodTime = endTimeMills - startTimeMills;
+
+        long periodTimeSecond = periodTime / 1000 ;
+
+        if(periodTimeSecond < 60 ){
+            try {
+                Thread.sleep((60 - periodTimeSecond) * 1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        //支持秒刷的业务
+        for(Exercise exercise : exercises){
+            if(exercise.getStatus().contains("未完成")){
+                // / )
+
+                int leftNumberIndex = exercise.getStatus().indexOf("（");
+
+                int indexStart = exercise.getStatus().indexOf("/ ");
+                int hasCompleteCount = Integer.valueOf(exercise.getStatus().substring(leftNumberIndex + "（".length() ,indexStart -1 ));
+
+                int indexEnd = exercise.getStatus().indexOf("）");
+                String allNeedCount = exercise.getStatus().substring(indexStart + "/ ".length(), indexEnd  ).trim();
+                int need2Complete = Integer.valueOf(allNeedCount) - hasCompleteCount;
+                int needCount = -1;
+                if(need2Complete % 2 == 0){
+                    needCount = need2Complete / 2 ;
+                }else{
+                    needCount = need2Complete / 2 + 1 ;
+                }
+                for(int count = 0 ; count < needCount ; count++){
+                    //解决看视频太慢的问题 浪费了三十秒 很慢 要是多个答案 就非常慢了
+                    //        Thread.sleep(30000);
+                    //支持秒刷的业务逻辑
+                    String url = "http://course.njcedu.com/Servlet/recordStudy.svl?lCourseId=" + exercise.getNumber() +
+                            "&lSchoolId=" + this.lschoolId + "&strStartTime=0";
+                    HttpClientUtil.getResByUrlAndCookie(url, null , getCookieByMap(cookieMap), false);
+                    System.out.print(".");
+                }
+            }
+            hasCompleteExercise++;
+            System.out.println(blankStyle+ blankStyle + exercise.getName()  + hasCompleteExercise / exercises.size() * 100 +"%" );
         }
     }
 
@@ -983,7 +1033,7 @@ public class APIController {
 
 
         Document doc = Jsoup.parse(respStr);
-        Element ele = doc.select("#ExamTable").first();
+        Element ele = doc.select("#careerTable").first();
         Elements tdEles = ele.select("a");
         List<String> ids = tdEles.parallelStream()
                 .map(tempEle ->{
@@ -1124,14 +1174,16 @@ public class APIController {
 
     private NodeFilter createExamTableFilter() {
         return new NodeFilter() {
+            @Override
             public boolean accept(Node node) {
                 if (node != null
                         && node instanceof TableTag
                         && ((TableTag) node).getAttribute("id") != null
                         && ((TableTag) node).getAttribute("id").equals("ExamTable")) {
                     return true;
-                } else
+                } else {
                     return false;
+                }
             }
         };
     }
@@ -1361,7 +1413,12 @@ public class APIController {
 
         String respAndCookie = HttpClientUtil.getResByUrlAndCookie(url, null,  coursewareCookie, true);
 
-        rebuildCookieMap(respAndCookie.split("#")[1]);
+
+//        System.out.println(respAndCookie);
+        if(StringUtils.isNotEmpty(respAndCookie)){
+            rebuildCookieMap(respAndCookie.split("#")[1]);
+        }
+
 
         return;
     }

@@ -33,7 +33,6 @@ com/fsy/task/domain/Test.class
 com/fsy/task/gui/Main.class
 com/fsy/task/domain/ImportUser$ImportUserBuilder.class
 com/fsy/task/domain/ExercisesAndTests.class
-com/fsy/task/GlobalConfig.class
 com/fsy/task/APIController$9.class
 com/fsy/task/APIController$2.class
 com/fsy/task/domain/TeachPlan$TeachPlanBuilder.class
@@ -51,3 +50,4 @@ com/fsy/task/domain/ExamDto$ExamDtoBuilder.class
 com/fsy/task/APIController$5.class
 com/fsy/task/APIController$8.class
 com/fsy/task/domain/ExercisesAndTests$ExercisesAndTestsBuilder.class
+com/fsy/task/ApiController2.class

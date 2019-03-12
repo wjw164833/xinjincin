@@ -4,6 +4,7 @@ import com.fsy.task.domain.Exercise;
 import com.fsy.task.domain.User;
 import com.fsy.task.util.Constant;
 import org.openqa.selenium.By;
+import org.openqa.selenium.UnhandledAlertException;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -22,8 +23,8 @@ public class SeleniumUtil {
         return;
     }
     public User getUser(String username , String password){
-        System.setProperty("webdriver.gecko.driver","F:\\Mozilla Firefox\\geckodriver.exe");
-//        System.setProperty("webdriver.gecko.driver","/Users/fushiyong/Downloads/geckodriver");
+//        System.setProperty("webdriver.gecko.driver","C:\\Program Files (x86)\\MTS\\geckodriver.exe");
+        System.setProperty("webdriver.gecko.driver","/Users/fushiyong/Downloads/geckodriver");
 
 
         // TODO Auto-generated method stub
@@ -70,11 +71,17 @@ public class SeleniumUtil {
 
 //            System.out.println("获取token第" + count  + "次 ");
             try {
+
+                firefoxDriver.manage().window();
+//                WebElement agreeButton = firefoxDriver.findElement(By.className("agree_btn"));
                 schoolToken = firefoxDriver.manage().getCookieNamed("schoolToken").getValue();
                 Thread.sleep(Constant.TIMEOUT * 1000);
             } catch (InterruptedException e2) {
                 e2.printStackTrace();
-            }catch (Exception e3){
+            }catch (UnhandledAlertException alertExc){
+                System.out.println("跳过邮箱验证");
+            }
+            catch (Exception e3){
                 e3.printStackTrace();
             }
         }while(schoolToken == null);
@@ -91,7 +98,7 @@ public class SeleniumUtil {
         String userSchoolId = firefoxDriver.getPageSource();
 
 
-        String nickName = firefoxDriver.findElementByXPath("/html/body/span[1]/div/ul/li[2]/div[4]").getText().split(",")[1];
+        String nickName = firefoxDriver.findElementByXPath("/html/body/span[1]/div/ul/li[2]/div[5]").getText().split(",")[1].trim();
 
         firefoxDriver.quit();
 //        firefoxDriver.close();

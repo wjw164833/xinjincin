@@ -138,16 +138,107 @@ public class APIController {
         validateParam();
 
         appendSchoolToken2CookieMap(user.getSchoolToken());
-        doAnswer01();
 
-        //登录获取cookie
         getSchoolLoginUrlAndCookie();
-        doWatch01();
 
+        getTeachPlans(this.getCookie());
+        doAnswer01();
+        //登录获取cookie
+        doWatch01();
         //测评准备工作
         preTest();
 
+        doExamV2();
+//        doExam();
+    }
 
+    private void doExamV2() {
+        //做考试
+        if(CollectionsUtil.isNoyEmpty(plans))
+        for(TeachPlan plan : plans)
+                    if(CollectionsUtil.isNoyEmpty(exercisesAndTests.getExamIds())){
+                        exercisesAndTests.getExamIds().parallelStream()
+                                .filter(string-> string.contains("="))
+                                .map(string-> string.split("=")[string.split("=").length - 1 ])
+                                .forEach(examId->{
+                                    String checkResp = checkCourseRate(examId);
+                                    System.out.println("检查试卷是否可以考试返回:"+checkResp);
+
+//                                String secondCheckResp = checkCourseRate(examId);
+//                                System.out.println("检查试卷是否可以考试返回:"+secondCheckResp);
+
+                                    String examHtml = getExamHtml(examId);
+
+                                    //载入题库2 key -> id value -> answer
+                                    Map<String,String> tiku2 = new HashMap<>();
+                                    File file = new File(homeDir+File.separator + "zgtda");
+                                    if(file.exists() && file.isDirectory()){
+                                        Arrays.stream(file.list((File tempFile, String name) -> {
+                                            return Pattern.compile("[a-z]{2}\\.txt").matcher(name).find();
+                                        })).map((String str)->{
+                                            return  new File(homeDir+File.separator + "zgtda"+File.separator+str);
+                                        })
+                                                .forEach((File f)-> {
+                                                            try {
+                                                                //可以使用files方法files.lines()
+                                                                BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f) ,Charset.forName("GBK") ));
+                                                                String content = br.lines().collect(Collectors.joining(","));
+                                                                for(String str : content.split(",")){
+                                                                    tiku2.put(str.split("=")[0],str.split("=")[1]);
+                                                                }
+                                                            } catch (FileNotFoundException e) {
+                                                                e.printStackTrace();
+                                                            }
+                                                        }
+                                                );
+                                    }
+
+                                    //选择题解析
+                                    HashMap<String,String> xuanZeMap = getXuanZeTiMap(examHtml);
+                                    if(!checkResp.equals("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"-1\"/><STRF N=\"strText\" V=\"0\"/><STRF N=\"strInfo\" V=\"\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>")){
+                                        //可以考试
+                                        String questionAnswer = "";
+                                        String questionId = "";
+                                        for(Map<String,String> map : answersCache){
+                                            answersCacheIdAnswerMap.put(map.get("id") , map.get("answer"));
+                                        }
+
+                                        for(Map.Entry<String,String> entry : xuanZeMap.entrySet()){
+                                            if(answersCacheIdAnswerMap.containsKey(entry.getValue())){
+                                                //有答案
+                                                questionId = entry.getValue();
+                                                questionAnswer = answersCacheIdAnswerMap.get(entry.getValue());
+                                            }else{
+                                                //无答案
+                                                questionId = entry.getValue();
+                                                questionAnswer = tiku2.get(entry.getValue());
+                                            }
+
+                                            //提交选择题
+                                            String postXuanZeUrl = "http://"+schoolCode+".njcedu.com/student/prese/examin/handleTrans.cdo?strServiceName=StudentExminService&strTransName=doAnswer";
+                                            HashMap<String,String> postMap = new HashMap<>();
+                                            String postValue = "<CDO>\n" +
+                                                    "    <STRF N=\"$strDestNodeName$\" V=\"TeachingBusiness\"/>\n" +
+                                                    "    <STRF N=\"strServiceName\" V=\"StudentExminService\"/>\n" +
+                                                    "    <STRF N=\"strTransName\" V=\"doAnswer\"/>\n" +
+                                                    "    <LF N=\"lSchoolId\" V=\""+lschoolId+"\"/>\n" +
+                                                    "    <LF N=\"lUserId\" V=\""+lUserId+"\"/>\n" +
+                                                    "    <LF N=\"lExaminId\" V=\""+examId+"\"/>\n" +
+                                                    "    <LF N=\"lPlanId\" V=\""+plan.getShowPlanNumber()+"\"/>\n" +
+                                                    "    <LF N=\"nExaminType\" V=\"0\"/>\n" +
+                                                    "    <LF N=\"lQuestionId\" V=\""+questionId+"\"/>\n" +
+                                                    "    <STRF N=\"strQuestionAnswer\" V=\""+questionAnswer+"\"/>\n" +
+                                                    "</CDO>";
+                                            postMap.put("$$CDORequest$$" ,postValue );
+                                            String submitXuanZeTi = HttpClientUtil.postResByUrlAndCookie(postXuanZeUrl ,  getCookie() , postMap ,false);
+                                        }
+                                        //主观题解析
+                                        HashMap<String,String> zhuGuanMap = getZhuGuanQueMap(examHtml);
+                                        //主观题
+                                        postZhuGaunQue(examId ,plan.getShowPlanNumber() ,  zhuGuanMap);
+                                    }
+                                });
+                    }
     }
 
     /**
@@ -737,7 +828,7 @@ public class APIController {
         //需要登录
         String blankStyle = "      ";
         System.out.println(this.username + "  开始做试题：");
-        getSchoolLoginUrlAndCookie();
+//        getSchoolLoginUrlAndCookie();
         if(plans != null && plans.size() >0){
 
             for(TeachPlan plan : plans){
@@ -761,90 +852,7 @@ public class APIController {
                         System.out.println(blankStyle + blankStyle + exercise.getName() );
                         System.out.println( blankStyle + blankStyle + hasCompleteExercise / exercisesAndTests.getExercises().size() * 100 +"%");
                     }
-                    //做考试
-                    if(CollectionsUtil.isNoyEmpty(exercisesAndTests.getExamIds())){
-                        exercisesAndTests.getExamIds().parallelStream()
-                                .filter(string-> string.contains("="))
-                                .map(string-> string.split("=")[string.split("=").length - 1 ])
-                                .forEach(examId->{
-                                    String checkResp = checkCourseRate(examId);
-                                    System.out.println("检查试卷是否可以考试返回:"+checkResp);
-
-//                                String secondCheckResp = checkCourseRate(examId);
-//                                System.out.println("检查试卷是否可以考试返回:"+secondCheckResp);
-
-                                    String examHtml = getExamHtml(examId);
-
-                                    //载入题库2 key -> id value -> answer
-                                    Map<String,String> tiku2 = new HashMap<>();
-                                    File file = new File(homeDir+File.separator + "zgtda");
-                                    if(file.exists() && file.isDirectory()){
-                                        Arrays.stream(file.list((File tempFile, String name) -> {
-                                            return Pattern.compile("[a-z]{2}\\.txt").matcher(name).find();
-                                        })).map((String str)->{
-                                            return  new File(homeDir+File.separator + "zgtda"+File.separator+str);
-                                        })
-                                                .forEach((File f)-> {
-                                                            try {
-                                                                //可以使用files方法files.lines()
-                                                                BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f) ,Charset.forName("GBK") ));
-                                                                String content = br.lines().collect(Collectors.joining(","));
-                                                                for(String str : content.split(",")){
-                                                                    tiku2.put(str.split("=")[0],str.split("=")[1]);
-                                                                }
-                                                            } catch (FileNotFoundException e) {
-                                                                e.printStackTrace();
-                                                            }
-                                                        }
-                                                );
-                                    }
-
-                                    //选择题解析
-                                    HashMap<String,String> xuanZeMap = getXuanZeTiMap(examHtml);
-                                    if(!checkResp.equals("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"-1\"/><STRF N=\"strText\" V=\"0\"/><STRF N=\"strInfo\" V=\"\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>")){
-                                        //可以考试
-                                        String questionAnswer = "";
-                                        String questionId = "";
-                                        for(Map<String,String> map : answersCache){
-                                            answersCacheIdAnswerMap.put(map.get("id") , map.get("answer"));
-                                        }
-
-                                        for(Map.Entry<String,String> entry : xuanZeMap.entrySet()){
-                                            if(answersCacheIdAnswerMap.containsKey(entry.getValue())){
-                                                //有答案
-                                                questionId = entry.getValue();
-                                                questionAnswer = answersCacheIdAnswerMap.get(entry.getValue());
-                                            }else{
-                                                //无答案
-                                                questionId = entry.getValue();
-                                                questionAnswer = tiku2.get(entry.getValue());
-                                            }
-
-                                            //提交选择题
-                                            String postXuanZeUrl = "http://"+schoolCode+".njcedu.com/student/prese/examin/handleTrans.cdo?strServiceName=StudentExminService&strTransName=doAnswer";
-                                            HashMap<String,String> postMap = new HashMap<>();
-                                            String postValue = "<CDO>\n" +
-                                                    "    <STRF N=\"$strDestNodeName$\" V=\"TeachingBusiness\"/>\n" +
-                                                    "    <STRF N=\"strServiceName\" V=\"StudentExminService\"/>\n" +
-                                                    "    <STRF N=\"strTransName\" V=\"doAnswer\"/>\n" +
-                                                    "    <LF N=\"lSchoolId\" V=\""+lschoolId+"\"/>\n" +
-                                                    "    <LF N=\"lUserId\" V=\""+lUserId+"\"/>\n" +
-                                                    "    <LF N=\"lExaminId\" V=\""+examId+"\"/>\n" +
-                                                    "    <LF N=\"lPlanId\" V=\""+plan.getShowPlanNumber()+"\"/>\n" +
-                                                    "    <LF N=\"nExaminType\" V=\"0\"/>\n" +
-                                                    "    <LF N=\"lQuestionId\" V=\""+questionId+"\"/>\n" +
-                                                    "    <STRF N=\"strQuestionAnswer\" V=\""+questionAnswer+"\"/>\n" +
-                                                    "</CDO>";
-                                            postMap.put("$$CDORequest$$" ,postValue );
-                                            String submitXuanZeTi = HttpClientUtil.postResByUrlAndCookie(postXuanZeUrl ,  getCookie() , postMap ,false);
-                                        }
-                                        //主观题解析
-                                        HashMap<String,String> zhuGuanMap = getZhuGuanQueMap(examHtml);
-                                        //主观题
-                                        postZhuGaunQue(examId ,plan.getShowPlanNumber() ,  zhuGuanMap);
-                                    }
-                                });
-                    }
+//
                 }else{
                     System.out.println("做试题 "+plan.getTaskName() + " 已完成 ，自动跳过。");
                 }
@@ -1028,19 +1036,19 @@ public class APIController {
 
 
 
-        Document doc = Jsoup.parse(respStr);
-        Element ele = doc.select("#careerTable").first();
-
-        if(ele != null){
-            Elements tdEles = ele.select("a");
-            List<String> ids = tdEles.parallelStream()
-                    .map(tempEle ->{
-                        return tempEle.attr("href");
-                    })
-                    .collect(Collectors.toList());
-
-            exercisesAndTests.setExamIds(ids);
-        }
+//        Document doc = Jsoup.parse(respStr);
+//        Element ele = doc.select("#ExamTable").first();
+//
+//        if(ele != null){
+//            Elements tdEles = ele.select("a");
+//            List<String> ids = tdEles.parallelStream()
+//                    .map(tempEle ->{
+//                        return tempEle.attr("href");
+//                    })
+//                    .collect(Collectors.toList());
+//
+//            exercisesAndTests.setExamIds(ids);
+//        }
 
     }
 

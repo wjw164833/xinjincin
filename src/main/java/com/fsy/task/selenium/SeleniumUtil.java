@@ -23,9 +23,11 @@ public class SeleniumUtil {
         return;
     }
     public User getUser(String username , String password){
-        System.setProperty("webdriver.gecko.driver","C:\\Program Files (x86)\\MTS\\geckodriver.exe");
+//        System.setProperty("webdriver.gecko.driver","C:\\Program Files (x86)\\MTS\\geckodriver.exe");
 //        System.setProperty("webdriver.gecko.driver","/Users/fushiyong/Downloads/geckodriver");
+        //F:\Mozilla Firefox\geckodriver.exe
 
+        System.setProperty("webdriver.gecko.driver","F:\\Mozilla Firefox\\geckodriver.exe");
 
         // TODO Auto-generated method stub
         //如果测试的浏览器没有安装在默认目录，那么必须在程序中设置

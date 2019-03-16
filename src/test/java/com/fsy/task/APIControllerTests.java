@@ -26,7 +26,10 @@ public class APIControllerTests {
 //        APIController apiController = new APIController("tecsuda-1816473049" , "123456");
 
         //gyu-161215401008 123456
-        APIController apiController = new APIController("gyu-161215401008" , "123456");
+//        APIController apiController = new APIController("gyu-161215401008" , "123456");
+
+        //yau-1080615014042 123456
+        APIController apiController = new APIController("yau-1080615014042" , "123456");
 
     }
 }

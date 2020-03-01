@@ -259,26 +259,26 @@ public class APIController {
                 return urlSplited[urlSplited.length -1 ];
             }).forEach((String examId)->{
 
-//                String checkResp = checkCourseRate(examId);
-//                System.out.println("检查试卷是否可以考试返回:"+checkResp);
-//
-//                String examHtml = getExamHtml(examId);
-//
-//                //选择题解析
-//                HashMap<String,String> xuanZeMap = getXuanZeTiMap(examHtml);
-//                if(!checkResp.equals("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"-1\"/><STRF N=\"strText\" V=\"0\"/><STRF N=\"strInfo\" V=\"\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>")){
-//                    //可以考试
-//                    String answer = "";
-//                    for (Map<String, String> map : answersCache) {
-//                        //取部分标题
-//                        if(xuanZeMap.containsKey(map.get("title"))){
-//                            answer = map.get("answer");
-//                            System.out.println(map.get("title")+"找到答案:"+answer);
-//                        }
-//                    }
-//
-//                }
-//                //主观题解析
+                String checkResp = checkCourseRate(examId);
+                System.out.println("检查试卷是否可以考试返回:"+checkResp);
+
+                String examHtml = getExamHtml(examId);
+
+                //选择题解析
+                HashMap<String,String> xuanZeMap = getXuanZeTiMap(examHtml);
+                if(!checkResp.equals("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CDO><CDOF N=\"cdoReturn\"><CDO><NF N=\"nCode\" V=\"-1\"/><STRF N=\"strText\" V=\"0\"/><STRF N=\"strInfo\" V=\"\"/></CDO></CDOF><CDOF N=\"cdoResponse\"><CDO></CDO></CDOF></CDO>")){
+                    //可以考试
+                    String answer = "";
+                    for (Map<String, String> map : answersCache) {
+                        //取部分标题
+                        if(xuanZeMap.containsKey(map.get("title"))){
+                            answer = map.get("answer");
+                            System.out.println(map.get("title")+"找到答案:"+answer);
+                        }
+                    }
+
+                }
+                //主观题解析
 //                HashMap<String,String> zhuGuanMap = getZhuGuanQueMap(examHtml);
 //                //主观题
 //                postZhuGaunQue(examId ,planNo ,  zhuGuanMap);
@@ -1036,19 +1036,19 @@ public class APIController {
 
 
 
-//        Document doc = Jsoup.parse(respStr);
-//        Element ele = doc.select("#ExamTable").first();
-//
-//        if(ele != null){
-//            Elements tdEles = ele.select("a");
-//            List<String> ids = tdEles.parallelStream()
-//                    .map(tempEle ->{
-//                        return tempEle.attr("href");
-//                    })
-//                    .collect(Collectors.toList());
-//
-//            exercisesAndTests.setExamIds(ids);
-//        }
+        Document doc = Jsoup.parse(respStr);
+        Element ele = doc.select("#ExamTable").first();
+
+        if(ele != null){
+            Elements tdEles = ele.select("a");
+            List<String> ids = tdEles.parallelStream()
+                    .map(tempEle ->{
+                        return tempEle.attr("href");
+                    })
+                    .collect(Collectors.toList());
+
+            exercisesAndTests.setExamIds(ids);
+        }
 
     }
 
